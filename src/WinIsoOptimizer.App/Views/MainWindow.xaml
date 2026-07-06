@@ -82,15 +82,19 @@
                             <StackPanel Margin="8">
                                 <CheckBox Content="Išvalyti komponentų saugyklą (StartComponentCleanup, saugu, grįžtama)"
                                           IsChecked="{Binding ComponentStoreCleanup}" Margin="0,4" />
-                                <CheckBox Content="Taip pat visam laikui pašalinti pakeistų naujinimų senas versijas (ResetBase) — negrįžtama šiam WIM failui, bet sumažina dydį"
-                                          IsChecked="{Binding ComponentStoreResetBase}" Margin="0,4" TextWrapping="Wrap" />
+                                <CheckBox IsChecked="{Binding ComponentStoreResetBase}" Margin="0,4">
+                                    <TextBlock Text="Taip pat visam laikui pašalinti pakeistų naujinimų senas versijas (ResetBase) — negrįžtama šiam WIM failui, bet sumažina dydį"
+                                               TextWrapping="Wrap" />
+                                </CheckBox>
                             </StackPanel>
                         </GroupBox>
 
                         <GroupBox Header="Senų sistemų UEFI paleidimas" AutomationProperties.Name="Senų sistemų UEFI paleidimo nustatymų grupė">
                             <StackPanel Margin="8">
-                                <CheckBox Content="Pritaikyti UEFI paleidimo pataisą, jei ji tinka šiam ISO (žr. skirtuką „Šaltinis“ dėl paaiškinimo)"
-                                          IsChecked="{Binding ApplyLegacyUefiBootFix}" Margin="0,4" TextWrapping="Wrap" />
+                                <CheckBox IsChecked="{Binding ApplyLegacyUefiBootFix}" Margin="0,4">
+                                    <TextBlock Text="Pritaikyti UEFI paleidimo pataisą, jei ji tinka šiam ISO (žr. skirtuką „Šaltinis“ dėl paaiškinimo)"
+                                               TextWrapping="Wrap" />
+                                </CheckBox>
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>
@@ -143,9 +147,11 @@
                              AutomationProperties.Name="Eksportuotų draiverių sąrašas" />
 
                     <CheckBox Content="Įdėti šiuos draiverius į ISO (install.wim)" IsChecked="{Binding InjectDrivers}" Margin="0,4" />
-                    <CheckBox Content="Taip pat įdėti į boot.wim (reikalinga, jei diegimo programa nemato standžiojo disko / tinklo valdiklio)"
-                              IsChecked="{Binding AlsoInjectDriversIntoBootWim}" Margin="0,4" TextWrapping="Wrap"
-                              IsEnabled="{Binding InjectDrivers}" />
+                    <CheckBox IsChecked="{Binding AlsoInjectDriversIntoBootWim}" Margin="0,4"
+                              IsEnabled="{Binding InjectDrivers}">
+                        <TextBlock Text="Taip pat įdėti į boot.wim (reikalinga, jei diegimo programa nemato standžiojo disko / tinklo valdiklio)"
+                                   TextWrapping="Wrap" />
+                    </CheckBox>
                     <CheckBox Content="Leisti nepasirašytus draiverius (ForceUnsigned) — naudokite atsargiai"
                               IsChecked="{Binding ForceUnsignedDrivers}" Margin="0,4"
                               IsEnabled="{Binding InjectDrivers}" />
@@ -155,8 +161,10 @@
             <!-- ============================ UNATTEND / VIETINĖ PASKYRA ============================ -->
             <TabItem Header="_Vietinė paskyra">
                 <StackPanel Margin="12">
-                    <CheckBox Content="Sukurti autounattend.xml: vietinė paskyra vietoje Microsoft paskyros, praleisti privatumo/telemetrijos OOBE ekranus"
-                              IsChecked="{Binding GenerateUnattend}" Margin="0,0,0,12" TextWrapping="Wrap" />
+                    <CheckBox IsChecked="{Binding GenerateUnattend}" Margin="0,0,0,12">
+                        <TextBlock Text="Sukurti autounattend.xml: vietinė paskyra vietoje Microsoft paskyros, praleisti privatumo/telemetrijos OOBE ekranus"
+                                   TextWrapping="Wrap" />
+                    </CheckBox>
 
                     <StackPanel IsEnabled="{Binding GenerateUnattend}">
                         <Label Content="Vietinės paskyros vardas:" Target="{Binding ElementName=AccountNameBox}" />
