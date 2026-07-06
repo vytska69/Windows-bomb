@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using WinIsoOptimizer.Core.Download;
 using WinIsoOptimizer.Core.Drivers;
 using WinIsoOptimizer.Core.Imaging;
 using WinIsoOptimizer.Core.Jobs;
@@ -15,6 +17,8 @@ public sealed class MainViewModel : ViewModelBase
 {
     private readonly IsoOptimizationJob _job;
     private readonly ExternalToolPaths _toolPaths = new();
+    private readonly MicrosoftIsoDownloadService _isoDownloadService = new();
+    private readonly IHttpDownloader _isoFileDownloader = new HttpDownloader();
     private CancellationTokenSource? _runCancellation;
     private Task _appLoadTask = Task.CompletedTask;
 
@@ -25,6 +29,10 @@ public sealed class MainViewModel : ViewModelBase
         WorkingDirectory = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer");
         OscdimgPath = _toolPaths.Oscdimg; // setter also calls RefreshOscdimgStatus()
         AdkSetupExePath = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer", "adksetup.exe");
+        IsoDownloadDestinationPath = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer", "downloads", "Windows.iso");
+
+        foreach (var release in WindowsIsoCatalog.Releases) AvailableReleases.Add(release);
+        SelectedRelease = AvailableReleases.FirstOrDefault();
 
         LoadSourceCommand = new RelayCommand(LoadSourceAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(SourceIsoPath));
         ExportDriversCommand = new RelayCommand(ExportDriversAsync, () => !IsBusy);
@@ -32,6 +40,9 @@ public sealed class MainViewModel : ViewModelBase
         CancelCommand = new RelayCommand(() => _runCancellation?.Cancel(), () => IsBusy);
         OpenAdkDownloadPageCommand = new RelayCommand(OpenAdkDownloadPage);
         InstallAdkDeploymentToolsCommand = new RelayCommand(InstallAdkDeploymentToolsAsync, () => !IsBusy && File.Exists(AdkSetupExePath));
+        FetchLanguagesCommand = new RelayCommand(FetchLanguagesAsync, () => !IsBusy && SelectedRelease is not null);
+        FetchDownloadLinksCommand = new RelayCommand(FetchDownloadLinksAsync, () => !IsBusy && SelectedLanguage is not null);
+        DownloadIsoCommand = new RelayCommand(DownloadIsoAsync, () => !IsBusy && SelectedDownloadLink is not null && !string.IsNullOrWhiteSpace(IsoDownloadDestinationPath));
     }
 
     public RelayCommand LoadSourceCommand { get; }
@@ -40,11 +51,17 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand CancelCommand { get; }
     public RelayCommand OpenAdkDownloadPageCommand { get; }
     public RelayCommand InstallAdkDeploymentToolsCommand { get; }
+    public RelayCommand FetchLanguagesCommand { get; }
+    public RelayCommand FetchDownloadLinksCommand { get; }
+    public RelayCommand DownloadIsoCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
     public ObservableCollection<AppPackageOption> AvailableApps { get; } = new();
     public ObservableCollection<ExportedDriverInfo> ExportedDrivers { get; } = new();
+    public ObservableCollection<WindowsIsoRelease> AvailableReleases { get; } = new();
+    public ObservableCollection<WindowsIsoLanguageOption> AvailableLanguages { get; } = new();
+    public ObservableCollection<WindowsIsoDownloadLink> AvailableDownloadLinks { get; } = new();
 
     private string _sourceIsoPath = string.Empty;
     public string SourceIsoPath
@@ -126,7 +143,7 @@ public sealed class MainViewModel : ViewModelBase
         set => SetField(ref _progressPercent, value);
     }
 
-    private string _statusMessage = "Pasirinkite Windows ISO failą, tada spauskite \"Įkelti\".";
+    private string _statusMessage = "Pick a Windows ISO (or download one below), then click \"Load ISO\".";
     /// <summary>The single most recent status line. Bound to a control with
     /// AutomationProperties.LiveSetting="Polite" so screen readers announce each update as it happens.</summary>
     public string StatusMessage
@@ -154,6 +171,19 @@ public sealed class MainViewModel : ViewModelBase
         get => _legacyUefiBootStatus;
         set => SetField(ref _legacyUefiBootStatus, value);
     }
+
+    // --- Windows ISO download ---
+    private WindowsIsoRelease? _selectedRelease;
+    public WindowsIsoRelease? SelectedRelease { get => _selectedRelease; set => SetField(ref _selectedRelease, value); }
+
+    private WindowsIsoLanguageOption? _selectedLanguage;
+    public WindowsIsoLanguageOption? SelectedLanguage { get => _selectedLanguage; set => SetField(ref _selectedLanguage, value); }
+
+    private WindowsIsoDownloadLink? _selectedDownloadLink;
+    public WindowsIsoDownloadLink? SelectedDownloadLink { get => _selectedDownloadLink; set => SetField(ref _selectedDownloadLink, value); }
+
+    private string _isoDownloadDestinationPath = string.Empty;
+    public string IsoDownloadDestinationPath { get => _isoDownloadDestinationPath; set => SetField(ref _isoDownloadDestinationPath, value); }
 
     // --- Telemetry / optimization toggles ---
     private bool _applyPrivacyRegistryTweaks = true;
@@ -205,8 +235,8 @@ public sealed class MainViewModel : ViewModelBase
     private void RefreshOscdimgStatus()
     {
         OscdimgStatusText = AdkDeploymentToolsInstaller.IsOscdimgAvailable(_toolPaths)
-            ? $"Rasta: {_toolPaths.Oscdimg}"
-            : $"Nerasta: {_toolPaths.Oscdimg} — atsisiųskite Windows ADK ir įdiekite \"Deployment Tools\" komponentą (žr. žemiau).";
+            ? $"Found: {_toolPaths.Oscdimg}"
+            : $"Not found: {_toolPaths.Oscdimg} — download the Windows ADK and install the \"Deployment Tools\" component (see below).";
     }
 
     private static void OpenAdkDownloadPage()
@@ -222,16 +252,101 @@ public sealed class MainViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            Log("Diegiamas Windows ADK \"Deployment Tools\" komponentas (tyliai, be perkrovimo)...");
+            Log("Installing the Windows ADK \"Deployment Tools\" component (silent, no reboot)...");
             var found = await _job.AdkInstaller.InstallAndVerifyAsync(AdkSetupExePath, _toolPaths, new Progress<string>(Log)).ConfigureAwait(true);
             RefreshOscdimgStatus();
             Log(found
-                ? "oscdimg.exe sėkmingai rastas — ISO kūrimas dabar galimas."
-                : "Diegimas baigtas, bet oscdimg.exe vis tiek nerastas numatytoje vietoje — nurodykite jo kelią rankiniu būdu \"Kūrimas\" skirtuke.");
+                ? "oscdimg.exe was found — ISO building is now available."
+                : "Install finished, but oscdimg.exe still isn't at the default location — browse to it manually on the \"Build\" tab.");
         }
         catch (Exception ex)
         {
-            Log($"Klaida diegiant ADK Deployment Tools: {ex.Message}");
+            Log($"Error installing the ADK Deployment Tools: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task FetchLanguagesAsync()
+    {
+        var release = SelectedRelease;
+        if (release is null) return;
+
+        IsBusy = true;
+        AvailableLanguages.Clear();
+        AvailableDownloadLinks.Clear();
+        try
+        {
+            Log($"Fetching available languages for {release.DisplayName} from Microsoft...");
+            var languages = await _isoDownloadService.GetLanguagesAsync(release, progress: new Progress<string>(Log)).ConfigureAwait(true);
+            foreach (var language in languages) AvailableLanguages.Add(language);
+            SelectedLanguage = AvailableLanguages.FirstOrDefault(l => l.LanguageCode.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+                ?? AvailableLanguages.FirstOrDefault();
+            Log($"Found {AvailableLanguages.Count} language(s). Pick one, then fetch download links.");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error fetching languages from Microsoft: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task FetchDownloadLinksAsync()
+    {
+        var language = SelectedLanguage;
+        if (language is null) return;
+
+        IsBusy = true;
+        AvailableDownloadLinks.Clear();
+        try
+        {
+            Log($"Fetching download links for {language.DisplayName} from Microsoft...");
+            var links = await _isoDownloadService.GetDownloadLinksAsync(language, progress: new Progress<string>(Log)).ConfigureAwait(true);
+            foreach (var link in links) AvailableDownloadLinks.Add(link);
+            var currentArch = GetCurrentArchitectureName();
+            SelectedDownloadLink = AvailableDownloadLinks.FirstOrDefault(l => string.Equals(l.Architecture, currentArch, StringComparison.OrdinalIgnoreCase))
+                ?? AvailableDownloadLinks.FirstOrDefault();
+            Log($"Found {AvailableDownloadLinks.Count} download link(s). Pick an architecture, then download.");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error fetching download links from Microsoft: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private static string GetCurrentArchitectureName() => RuntimeInformation.OSArchitecture switch
+    {
+        Architecture.X86 => "x86",
+        Architecture.X64 => "x64",
+        Architecture.Arm64 => "ARM64",
+        _ => "x64",
+    };
+
+    private async Task DownloadIsoAsync()
+    {
+        var link = SelectedDownloadLink;
+        if (link is null) return;
+
+        IsBusy = true;
+        try
+        {
+            Log($"Downloading {link.Architecture} ISO from Microsoft to {IsoDownloadDestinationPath}...");
+            await _isoFileDownloader.DownloadFileAsync(link.Url, IsoDownloadDestinationPath, new Progress<string>(Log)).ConfigureAwait(true);
+            SourceIsoPath = IsoDownloadDestinationPath;
+            Log("Download complete. The ISO is now set as the source — go to the \"Source\" tab and click \"Load ISO\".");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error downloading the ISO: {ex.Message}");
         }
         finally
         {
@@ -272,11 +387,11 @@ public sealed class MainViewModel : ViewModelBase
             LegacyUefiBootStatus = assessment.Explanation;
 
             HasLoadedSource = true;
-            Log("ISO įkeltas. Pasirinkite leidimą, telemetrijos/optimizavimo parinktis ir programėles šalinimui.");
+            Log("ISO loaded. Pick an edition, telemetry/optimization options, and apps to remove.");
         }
         catch (Exception ex)
         {
-            Log($"Klaida įkeliant ISO: {ex.Message}");
+            Log($"Error loading the ISO: {ex.Message}");
         }
         finally
         {
@@ -305,7 +420,7 @@ public sealed class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Log($"Nepavyko nuskaityti programėlių sąrašo: {ex.Message}");
+            Log($"Could not read the list of apps: {ex.Message}");
         }
     }
 
@@ -315,14 +430,14 @@ public sealed class MainViewModel : ViewModelBase
         ExportedDrivers.Clear();
         try
         {
-            Log("Eksportuojami veikiančios sistemos draiveriai...");
+            Log("Exporting drivers from the running system...");
             var drivers = await _job.Drivers.ExportFromRunningSystemAsync(DriverExportFolder, new Progress<string>(Log)).ConfigureAwait(true);
             foreach (var driver in drivers) ExportedDrivers.Add(driver);
-            Log($"Eksportuota draiverių: {drivers.Count}.");
+            Log($"Exported {drivers.Count} driver(s).");
         }
         catch (Exception ex)
         {
-            Log($"Klaida eksportuojant draiverius: {ex.Message}");
+            Log($"Error exporting drivers: {ex.Message}");
         }
         finally
         {
@@ -370,11 +485,11 @@ public sealed class MainViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
-            Log("Atšaukta.");
+            Log("Cancelled.");
         }
         catch (Exception ex)
         {
-            Log($"Klaida: {ex.Message}");
+            Log($"Error: {ex.Message}");
         }
         finally
         {

@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:WinIsoOptimizer.App.ViewModels"
-        Title="Windows ISO optimizatorius"
+        Title="Windows ISO Optimizer"
         Height="720" Width="980"
         MinHeight="560" MinWidth="760">
     <Window.DataContext>
@@ -16,83 +16,134 @@
         </Grid.RowDefinitions>
 
         <!-- Not disabled while a job is running: the Cancel button lives inside this TabControl's
-             content (Kūrimas tab), so disabling the whole control would make it unreachable exactly
+             content (Build tab), so disabling the whole control would make it unreachable exactly
              when it's needed. Each action button already gates itself via its command's CanExecute. -->
-        <TabControl Grid.Row="0" AutomationProperties.Name="Optimizavimo skirtukai">
+        <TabControl Grid.Row="0" AutomationProperties.Name="Optimizer tabs">
 
-            <!-- ============================ ŠALTINIS ============================ -->
-            <TabItem Header="_Šaltinis">
+            <!-- ============================ DOWNLOAD WINDOWS ============================ -->
+            <TabItem Header="_Download Windows">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,12"
+                                   Text="Downloads an official Windows ISO directly from Microsoft's own servers (Home/Pro/Education editions only) — the same public download flow tools like Rufus and Fido use. No third-party mirrors, no Microsoft account required." />
+
+                        <Label Content="Windows release:" Target="{Binding ElementName=ReleaseList}" />
+                        <ListBox x:Name="ReleaseList" Height="70" Margin="0,0,0,8"
+                                 ItemsSource="{Binding AvailableReleases}"
+                                 SelectedItem="{Binding SelectedRelease}"
+                                 DisplayMemberPath="DisplayName"
+                                 AutomationProperties.Name="Windows release to download" />
+                        <Button Content="_Fetch languages" Width="200" HorizontalAlignment="Left" Margin="0,0,0,12"
+                                Command="{Binding FetchLanguagesCommand}"
+                                AutomationProperties.Name="Fetch available languages for the selected Windows release from Microsoft" />
+
+                        <Label Content="Language:" Target="{Binding ElementName=LanguageList}" />
+                        <ListBox x:Name="LanguageList" Height="90" Margin="0,0,0,8"
+                                 ItemsSource="{Binding AvailableLanguages}"
+                                 SelectedItem="{Binding SelectedLanguage}"
+                                 DisplayMemberPath="DisplayName"
+                                 AutomationProperties.Name="Language for the ISO" />
+                        <Button Content="Fetch d_ownload links" Width="200" HorizontalAlignment="Left" Margin="0,0,0,12"
+                                Command="{Binding FetchDownloadLinksCommand}"
+                                AutomationProperties.Name="Fetch download links for the selected language from Microsoft" />
+
+                        <Label Content="Architecture:" Target="{Binding ElementName=LinkList}" />
+                        <ListBox x:Name="LinkList" Height="70" Margin="0,0,0,8"
+                                 ItemsSource="{Binding AvailableDownloadLinks}"
+                                 SelectedItem="{Binding SelectedDownloadLink}"
+                                 DisplayMemberPath="Architecture"
+                                 AutomationProperties.Name="Architecture to download" />
+
+                        <Label Content="Save ISO as:" Target="{Binding ElementName=IsoDestinationBox}" />
+                        <DockPanel Margin="0,0,0,8">
+                            <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
+                                    Click="BrowseIsoDestination_Click"
+                                    AutomationProperties.Name="Browse where to save the downloaded ISO" />
+                            <TextBox x:Name="IsoDestinationBox" Text="{Binding IsoDownloadDestinationPath, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Path to save the downloaded ISO" />
+                        </DockPanel>
+
+                        <Button Content="Download ISO" Width="160" Height="30" HorizontalAlignment="Left"
+                                Command="{Binding DownloadIsoCommand}"
+                                AutomationProperties.Name="Download the selected ISO from Microsoft"
+                                AutomationProperties.HelpText="Downloads the ISO and sets it as the source on the Source tab." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================ SOURCE ============================ -->
+            <TabItem Header="_Source">
                 <StackPanel Margin="12">
-                    <Label Content="Windows ISO failas:" Target="{Binding ElementName=SourceIsoBox}" />
+                    <Label Content="Windows ISO file:" Target="{Binding ElementName=SourceIsoBox}" />
                     <DockPanel Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseSourceIso_Click"
-                                AutomationProperties.Name="Naršyti Windows ISO failo" />
+                                AutomationProperties.Name="Browse for the Windows ISO file" />
                         <TextBox x:Name="SourceIsoBox" Text="{Binding SourceIsoPath, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Windows ISO failo kelias" />
+                                 AutomationProperties.Name="Path to the Windows ISO file" />
                     </DockPanel>
 
-                    <Label Content="Darbinis aplankas (laikini failai):" Target="{Binding ElementName=WorkDirBox}" />
+                    <Label Content="Working folder (temporary files):" Target="{Binding ElementName=WorkDirBox}" />
                     <DockPanel Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseWorkingDirectory_Click"
-                                AutomationProperties.Name="Naršyti darbinio aplanko" />
+                                AutomationProperties.Name="Browse for the working folder" />
                         <TextBox x:Name="WorkDirBox" Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Darbinio aplanko kelias" />
+                                 AutomationProperties.Name="Path to the working folder" />
                     </DockPanel>
 
-                    <Button Content="_Įkelti ISO" Width="160" HorizontalAlignment="Left" Margin="0,4,0,12"
+                    <Button Content="_Load ISO" Width="160" HorizontalAlignment="Left" Margin="0,4,0,12"
                             Command="{Binding LoadSourceCommand}"
-                            AutomationProperties.Name="Įkelti ir išanalizuoti pasirinktą ISO failą"
-                            AutomationProperties.HelpText="Išpakuoja ISO turinį ir nuskaito Windows leidimus bei įdiegtas programėles." />
+                            AutomationProperties.Name="Load and inspect the selected ISO file"
+                            AutomationProperties.HelpText="Extracts the ISO contents and reads the Windows editions and installed apps it contains." />
 
-                    <Label Content="Windows leidimas šiame ISO faile:" Target="{Binding ElementName=EditionsList}" />
+                    <Label Content="Windows edition in this ISO:" Target="{Binding ElementName=EditionsList}" />
                     <ListBox x:Name="EditionsList" Height="110" Margin="0,0,0,8"
                              ItemsSource="{Binding Editions}"
                              SelectedItem="{Binding SelectedEdition}"
                              DisplayMemberPath="Name"
-                             AutomationProperties.Name="Windows leidimai šiame ISO faile" />
+                             AutomationProperties.Name="Windows editions in this ISO" />
 
-                    <TextBlock Text="Senų sistemų (7 / Vista / XP / 8.1) UEFI paleidimo patikra:" FontWeight="Bold" Margin="0,8,0,2" />
+                    <TextBlock Text="Legacy-OS (7 / Vista / XP / 8.1) UEFI boot check:" FontWeight="Bold" Margin="0,8,0,2" />
                     <TextBlock Text="{Binding LegacyUefiBootStatus}" TextWrapping="Wrap"
-                               AutomationProperties.Name="Senų sistemų UEFI paleidimo patikros rezultatas" />
+                               AutomationProperties.Name="Legacy-OS UEFI boot check result" />
                 </StackPanel>
             </TabItem>
 
-            <!-- ============================ TELEMETRIJA / OPTIMIZAVIMAS ============================ -->
-            <TabItem Header="_Telemetrija ir optimizavimas">
+            <!-- ============================ TELEMETRY / OPTIMIZATION ============================ -->
+            <TabItem Header="_Telemetry and Optimization">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="12">
-                        <GroupBox Header="Telemetrijos ir privatumo nustatymai" Margin="0,0,0,12"
-                                  AutomationProperties.Name="Telemetrijos ir privatumo nustatymų grupė">
+                        <GroupBox Header="Telemetry and privacy settings" Margin="0,0,0,12"
+                                  AutomationProperties.Name="Telemetry and privacy settings group">
                             <StackPanel Margin="8">
-                                <CheckBox Content="Taikyti privatumo/telemetrijos registro politikas (AllowTelemetry, reklamos ID, Cortana, pasiūlymai ir kt.)"
+                                <CheckBox Content="Apply privacy/telemetry registry policies (AllowTelemetry, advertising ID, Cortana, suggested apps, etc.)"
                                           IsChecked="{Binding ApplyPrivacyRegistryTweaks}" Margin="0,4" />
-                                <CheckBox Content="Išjungti telemetrijos paslaugas (DiagTrack, dmwappushservice)"
+                                <CheckBox Content="Disable telemetry services (DiagTrack, dmwappushservice)"
                                           IsChecked="{Binding DisableTelemetryServices}" Margin="0,4" />
-                                <CheckBox Content="Išjungti telemetrijos suplanuotas užduotis (Compatibility Appraiser, CEIP, Feedback ir kt.)"
+                                <CheckBox Content="Disable telemetry scheduled tasks (Compatibility Appraiser, CEIP, Feedback, etc.)"
                                           IsChecked="{Binding DisableTelemetryScheduledTasks}" Margin="0,4" />
-                                <CheckBox Content="Pašalinti OneDrive diegimo failus iš atvaizdo"
+                                <CheckBox Content="Remove OneDrive setup files from the image"
                                           IsChecked="{Binding RemoveOneDriveSetup}" Margin="0,4" />
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Atvaizdo (WIM) valymas" Margin="0,0,0,12"
-                                  AutomationProperties.Name="Atvaizdo valymo nustatymų grupė">
+                        <GroupBox Header="Image (WIM) cleanup" Margin="0,0,0,12"
+                                  AutomationProperties.Name="Image cleanup settings group">
                             <StackPanel Margin="8">
-                                <CheckBox Content="Išvalyti komponentų saugyklą (StartComponentCleanup, saugu, grįžtama)"
+                                <CheckBox Content="Clean up the component store (StartComponentCleanup, safe, reversible)"
                                           IsChecked="{Binding ComponentStoreCleanup}" Margin="0,4" />
                                 <CheckBox IsChecked="{Binding ComponentStoreResetBase}" Margin="0,4">
-                                    <TextBlock Text="Taip pat visam laikui pašalinti pakeistų naujinimų senas versijas (ResetBase) — negrįžtama šiam WIM failui, bet sumažina dydį"
+                                    <TextBlock Text="Also permanently remove superseded update versions (ResetBase) — irreversible for this WIM, but shrinks it further"
                                                TextWrapping="Wrap" />
                                 </CheckBox>
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Senų sistemų UEFI paleidimas" AutomationProperties.Name="Senų sistemų UEFI paleidimo nustatymų grupė">
+                        <GroupBox Header="Legacy-OS UEFI boot" AutomationProperties.Name="Legacy-OS UEFI boot settings group">
                             <StackPanel Margin="8">
                                 <CheckBox IsChecked="{Binding ApplyLegacyUefiBootFix}" Margin="0,4">
-                                    <TextBlock Text="Pritaikyti UEFI paleidimo pataisą, jei ji tinka šiam ISO (žr. skirtuką „Šaltinis“ dėl paaiškinimo)"
+                                    <TextBlock Text="Apply the UEFI boot fix if it applies to this ISO (see the Source tab for details)"
                                                TextWrapping="Wrap" />
                                 </CheckBox>
                             </StackPanel>
@@ -101,14 +152,14 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ============================ PROGRAMĖLĖS ============================ -->
-            <TabItem Header="_Programėlės">
+            <!-- ============================ APPS ============================ -->
+            <TabItem Header="_Apps">
                 <DockPanel Margin="12">
                     <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" TextWrapping="Wrap"
-                               Text="Pažymėkite programėles, kurias norite pašalinti iš pasirinkto Windows leidimo. Sąrašas užpildomas įkėlus ISO failą ir pasirinkus leidimą." />
+                               Text="Check the apps you want to remove from the selected Windows edition. This list is populated after you load the ISO and pick an edition." />
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding AvailableApps}"
-                                      AutomationProperties.Name="Programėlių, kurias galima pašalinti, sąrašas">
+                                      AutomationProperties.Name="List of apps that can be removed">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <CheckBox Content="{Binding AccessibleDescription}"
@@ -122,132 +173,132 @@
                 </DockPanel>
             </TabItem>
 
-            <!-- ============================ DRAIVERIAI ============================ -->
-            <TabItem Header="_Draiveriai">
+            <!-- ============================ DRIVERS ============================ -->
+            <TabItem Header="D_rivers">
                 <StackPanel Margin="12">
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
-                               Text="Galite išsitraukti visus trečiųjų šalių draiverius iš šiuo metu veikiančios Windows sistemos ir įdėti juos į ISO, kad nauja sistema iškart atpažintų šio kompiuterio aparatinę įrangą." />
+                               Text="You can pull every third-party driver from the Windows install you're currently running and inject them into the ISO, so the new install immediately recognizes this PC's hardware." />
 
-                    <Label Content="Aplankas draiveriams eksportuoti / importuoti:" Target="{Binding ElementName=DriverFolderBox}" />
+                    <Label Content="Folder to export/inject drivers:" Target="{Binding ElementName=DriverFolderBox}" />
                     <DockPanel Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseDriverFolder_Click"
-                                AutomationProperties.Name="Naršyti draiverių aplanko" />
+                                AutomationProperties.Name="Browse for the driver folder" />
                         <TextBox x:Name="DriverFolderBox" Text="{Binding DriverExportFolder, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Draiverių aplanko kelias" />
+                                 AutomationProperties.Name="Path to the driver folder" />
                     </DockPanel>
 
-                    <Button Content="_Eksportuoti draiverius iš šios sistemos" Width="280" HorizontalAlignment="Left" Margin="0,0,0,12"
+                    <Button Content="_Export drivers from this system" Width="280" HorizontalAlignment="Left" Margin="0,0,0,12"
                             Command="{Binding ExportDriversCommand}"
-                            AutomationProperties.Name="Eksportuoti draiverius iš šiuo metu veikiančios sistemos" />
+                            AutomationProperties.Name="Export drivers from the currently running system" />
 
                     <ListBox Height="140" Margin="0,0,0,12"
                              ItemsSource="{Binding ExportedDrivers}"
                              DisplayMemberPath="FolderName"
-                             AutomationProperties.Name="Eksportuotų draiverių sąrašas" />
+                             AutomationProperties.Name="List of exported drivers" />
 
-                    <CheckBox Content="Įdėti šiuos draiverius į ISO (install.wim)" IsChecked="{Binding InjectDrivers}" Margin="0,4" />
+                    <CheckBox Content="Inject these drivers into the ISO (install.wim)" IsChecked="{Binding InjectDrivers}" Margin="0,4" />
                     <CheckBox IsChecked="{Binding AlsoInjectDriversIntoBootWim}" Margin="0,4"
                               IsEnabled="{Binding InjectDrivers}">
-                        <TextBlock Text="Taip pat įdėti į boot.wim (reikalinga, jei diegimo programa nemato standžiojo disko / tinklo valdiklio)"
+                        <TextBlock Text="Also inject into boot.wim (needed if Setup itself can't see the storage/network controller)"
                                    TextWrapping="Wrap" />
                     </CheckBox>
-                    <CheckBox Content="Leisti nepasirašytus draiverius (ForceUnsigned) — naudokite atsargiai"
+                    <CheckBox Content="Allow unsigned drivers (ForceUnsigned) — use with caution"
                               IsChecked="{Binding ForceUnsignedDrivers}" Margin="0,4"
                               IsEnabled="{Binding InjectDrivers}" />
                 </StackPanel>
             </TabItem>
 
-            <!-- ============================ UNATTEND / VIETINĖ PASKYRA ============================ -->
-            <TabItem Header="_Vietinė paskyra">
+            <!-- ============================ UNATTEND / LOCAL ACCOUNT ============================ -->
+            <TabItem Header="_Local Account">
                 <StackPanel Margin="12">
                     <CheckBox IsChecked="{Binding GenerateUnattend}" Margin="0,0,0,12">
-                        <TextBlock Text="Sukurti autounattend.xml: vietinė paskyra vietoje Microsoft paskyros, praleisti privatumo/telemetrijos OOBE ekranus"
+                        <TextBlock Text="Create autounattend.xml: local account instead of a forced Microsoft account, skip privacy/telemetry OOBE screens"
                                    TextWrapping="Wrap" />
                     </CheckBox>
 
                     <StackPanel IsEnabled="{Binding GenerateUnattend}">
-                        <Label Content="Vietinės paskyros vardas:" Target="{Binding ElementName=AccountNameBox}" />
+                        <Label Content="Local account name:" Target="{Binding ElementName=AccountNameBox}" />
                         <TextBox x:Name="AccountNameBox" Text="{Binding LocalAccountName, UpdateSourceTrigger=PropertyChanged}"
                                  Width="260" HorizontalAlignment="Left" Margin="0,0,0,8"
-                                 AutomationProperties.Name="Vietinės paskyros vardas" />
+                                 AutomationProperties.Name="Local account name" />
 
-                        <Label Content="Vietinės paskyros slaptažodis:" Target="{Binding ElementName=AccountPasswordBox}" />
+                        <Label Content="Local account password:" Target="{Binding ElementName=AccountPasswordBox}" />
                         <PasswordBox x:Name="AccountPasswordBox" Width="260" HorizontalAlignment="Left" Margin="0,0,0,8"
                                      PasswordChanged="AccountPasswordBox_PasswordChanged"
-                                     AutomationProperties.Name="Vietinės paskyros slaptažodis" />
+                                     AutomationProperties.Name="Local account password" />
                         <TextBlock TextWrapping="Wrap" Foreground="Gray" MaxWidth="500" HorizontalAlignment="Left"
-                                   Text="Pastaba: slaptažodis autounattend.xml faile yra tik užkoduotas (Base64), ne tikrai apsaugotas — saugokite šį ISO/failą taip pat atsargiai, kaip ir bet kurį failą su slaptažodžiu." />
+                                   Text="Note: the password in autounattend.xml is only obfuscated (Base64), not truly protected — handle this ISO/file as carefully as you would any file containing a password." />
                     </StackPanel>
                 </StackPanel>
             </TabItem>
 
-            <!-- ============================ KŪRIMAS ============================ -->
-            <TabItem Header="_Kūrimas">
+            <!-- ============================ BUILD ============================ -->
+            <TabItem Header="_Build">
                 <StackPanel Margin="12">
-                    <Label Content="Išvesties ISO failas:" Target="{Binding ElementName=OutputIsoBox}" />
+                    <Label Content="Output ISO file:" Target="{Binding ElementName=OutputIsoBox}" />
                     <DockPanel Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseOutputIso_Click"
-                                AutomationProperties.Name="Naršyti kur išsaugoti ISO failą" />
+                                AutomationProperties.Name="Browse where to save the output ISO file" />
                         <TextBox x:Name="OutputIsoBox" Text="{Binding OutputIsoPath, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Išvesties ISO failo kelias" />
+                                 AutomationProperties.Name="Path to the output ISO file" />
                     </DockPanel>
 
-                    <Label Content="Tomo etiketė (Volume label):" Target="{Binding ElementName=VolumeLabelBox}" />
+                    <Label Content="Volume label:" Target="{Binding ElementName=VolumeLabelBox}" />
                     <TextBox x:Name="VolumeLabelBox" Text="{Binding VolumeLabel, UpdateSourceTrigger=PropertyChanged}"
                              Width="260" HorizontalAlignment="Left" Margin="0,0,0,8"
-                             AutomationProperties.Name="ISO tomo etiketė" />
+                             AutomationProperties.Name="ISO volume label" />
 
-                    <Label Content="oscdimg.exe kelias (iš Windows ADK):" Target="{Binding ElementName=OscdimgBox}" />
+                    <Label Content="oscdimg.exe path (from the Windows ADK):" Target="{Binding ElementName=OscdimgBox}" />
                     <DockPanel Margin="0,0,0,4">
-                        <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseOscdimg_Click"
-                                AutomationProperties.Name="Naršyti oscdimg.exe failo" />
+                                AutomationProperties.Name="Browse for oscdimg.exe" />
                         <TextBox x:Name="OscdimgBox" Text="{Binding OscdimgPath, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="oscdimg.exe kelias" />
+                                 AutomationProperties.Name="Path to oscdimg.exe" />
                     </DockPanel>
                     <TextBlock Text="{Binding OscdimgStatusText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                               AutomationProperties.Name="oscdimg.exe būsena" />
+                               AutomationProperties.Name="oscdimg.exe status" />
 
-                    <GroupBox Header="Neturite oscdimg.exe? Įdiekite Windows ADK Deployment Tools čia" Margin="0,0,0,12"
-                              AutomationProperties.Name="Windows ADK Deployment Tools diegimo grupė">
+                    <GroupBox Header="Don't have oscdimg.exe? Install the Windows ADK Deployment Tools here" Margin="0,0,0,12"
+                              AutomationProperties.Name="Windows ADK Deployment Tools install group">
                         <StackPanel Margin="8">
                             <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
-                                       Text="1) Atsidarykite oficialų Microsoft ADK atsisiuntimo puslapį ir atsisiųskite adksetup.exe. 2) Nurodykite atsisiųsto failo kelią žemiau. 3) Paspauskite „Įdiegti“ — Deployment Tools komponentas bus įdiegtas tyliai, be diegimo vedlio ir be perkrovimo." />
-                            <Button Content="Atidaryti ADK atsisiuntimo puslapį naršyklėje" Width="300" HorizontalAlignment="Left" Margin="0,0,0,8"
+                                       Text="1) Open the official Microsoft ADK download page and download adksetup.exe. 2) Point at the downloaded file below. 3) Click &quot;Install&quot; — the Deployment Tools component is installed silently, with no setup wizard and no reboot." />
+                            <Button Content="Open the ADK download page in your browser" Width="300" HorizontalAlignment="Left" Margin="0,0,0,8"
                                     Command="{Binding OpenAdkDownloadPageCommand}"
-                                    AutomationProperties.Name="Atidaryti oficialų Windows ADK atsisiuntimo puslapį naršyklėje" />
+                                    AutomationProperties.Name="Open the official Windows ADK download page in your browser" />
 
-                            <Label Content="Atsisiųsto adksetup.exe kelias:" Target="{Binding ElementName=AdkSetupBox}" />
+                            <Label Content="Downloaded adksetup.exe path:" Target="{Binding ElementName=AdkSetupBox}" />
                             <DockPanel Margin="0,0,0,8">
-                                <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                                <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
                                         Click="BrowseAdkSetup_Click"
-                                        AutomationProperties.Name="Naršyti adksetup.exe failo" />
+                                        AutomationProperties.Name="Browse for adksetup.exe" />
                                 <TextBox x:Name="AdkSetupBox" Text="{Binding AdkSetupExePath, UpdateSourceTrigger=PropertyChanged}"
-                                         AutomationProperties.Name="adksetup.exe kelias" />
+                                         AutomationProperties.Name="Path to adksetup.exe" />
                             </DockPanel>
 
-                            <Button Content="Įdiegti Deployment Tools automatiškai" Width="260" HorizontalAlignment="Left"
+                            <Button Content="Install Deployment Tools automatically" Width="260" HorizontalAlignment="Left"
                                     Command="{Binding InstallAdkDeploymentToolsCommand}"
-                                    AutomationProperties.Name="Automatiškai tyliai įdiegti Windows ADK Deployment Tools komponentą" />
+                                    AutomationProperties.Name="Automatically and silently install the Windows ADK Deployment Tools component" />
                         </StackPanel>
                     </GroupBox>
 
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="K_urti optimizuotą ISO" Width="200" Height="32" Margin="0,0,8,0"
+                        <Button Content="B_uild optimized ISO" Width="200" Height="32" Margin="0,0,8,0"
                                 Command="{Binding RunCommand}"
-                                AutomationProperties.Name="Pradėti optimizuoto ISO kūrimą"
-                                AutomationProperties.HelpText="Pritaiko pasirinktas optimizacijas ir sukuria naują paleidžiamą ISO failą." />
-                        <Button Content="_Atšaukti" Width="120" Height="32"
+                                AutomationProperties.Name="Start building the optimized ISO"
+                                AutomationProperties.HelpText="Applies the selected optimizations and builds a new bootable ISO." />
+                        <Button Content="_Cancel" Width="120" Height="32"
                                 Command="{Binding CancelCommand}"
-                                AutomationProperties.Name="Atšaukti vykdomą veiksmą" />
+                                AutomationProperties.Name="Cancel the running operation" />
                     </StackPanel>
                 </StackPanel>
             </TabItem>
         </TabControl>
 
-        <!-- ============================ BŪSENA / EIGA (visada matoma) ============================ -->
+        <!-- ============================ STATUS / PROGRESS (always visible) ============================ -->
         <Grid Grid.Row="1" Margin="0,12,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -257,15 +308,15 @@
 
             <ProgressBar Grid.Row="0" Height="18" Minimum="0" Maximum="100"
                          Value="{Binding ProgressPercent, Mode=OneWay}"
-                         AutomationProperties.Name="Veiksmo eigos juosta" />
+                         AutomationProperties.Name="Operation progress bar" />
 
             <TextBlock x:Name="StatusLiveRegion" Grid.Row="1" Margin="0,6,0,6" FontWeight="Bold"
                        Text="{Binding StatusMessage}"
-                       AutomationProperties.Name="Dabartinė būsena"
+                       AutomationProperties.Name="Current status"
                        AutomationProperties.LiveSetting="Polite" />
 
             <ListBox Grid.Row="2" Height="120" ItemsSource="{Binding LogMessages}"
-                     AutomationProperties.Name="Veiksmų žurnalas" />
+                     AutomationProperties.Name="Activity log" />
         </Grid>
     </Grid>
 </Window>

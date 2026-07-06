@@ -45,8 +45,8 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Pasirinkite Windows ISO failą",
-            Filter = "ISO failai (*.iso)|*.iso|Visi failai (*.*)|*.*",
+            Title = "Select a Windows ISO file",
+            Filter = "ISO files (*.iso)|*.iso|All files (*.*)|*.*",
         };
         if (dialog.ShowDialog(this) == true)
         {
@@ -58,8 +58,8 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Kur išsaugoti optimizuotą ISO failą",
-            Filter = "ISO failai (*.iso)|*.iso",
+            Title = "Where to save the optimized ISO file",
+            Filter = "ISO files (*.iso)|*.iso",
             DefaultExt = ".iso",
         };
         if (dialog.ShowDialog(this) == true)
@@ -72,8 +72,8 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Pasirinkite oscdimg.exe (Windows ADK Deployment Tools)",
-            Filter = "oscdimg.exe|oscdimg.exe|Vykdomieji failai (*.exe)|*.exe",
+            Title = "Select oscdimg.exe (Windows ADK Deployment Tools)",
+            Filter = "oscdimg.exe|oscdimg.exe|Executable files (*.exe)|*.exe",
         };
         if (dialog.ShowDialog(this) == true)
         {
@@ -85,8 +85,8 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Pasirinkite atsisiųstą adksetup.exe",
-            Filter = "adksetup.exe|adksetup.exe|Vykdomieji failai (*.exe)|*.exe",
+            Title = "Select the downloaded adksetup.exe",
+            Filter = "adksetup.exe|adksetup.exe|Executable files (*.exe)|*.exe",
         };
         if (dialog.ShowDialog(this) == true)
         {
@@ -94,11 +94,25 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BrowseIsoDestination_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Where to save the downloaded ISO file",
+            Filter = "ISO files (*.iso)|*.iso",
+            DefaultExt = ".iso",
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            ViewModel.IsoDownloadDestinationPath = dialog.FileName;
+        }
+    }
+
     private void BrowseWorkingDirectory_Click(object sender, RoutedEventArgs e) =>
-        BrowseFolder("Pasirinkite darbinį aplanką", path => ViewModel.WorkingDirectory = path);
+        BrowseFolder("Select the working folder", path => ViewModel.WorkingDirectory = path);
 
     private void BrowseDriverFolder_Click(object sender, RoutedEventArgs e) =>
-        BrowseFolder("Pasirinkite draiverių aplanką", path => ViewModel.DriverExportFolder = path);
+        BrowseFolder("Select the driver folder", path => ViewModel.DriverExportFolder = path);
 
     private void BrowseFolder(string title, Action<string> onSelected)
     {

@@ -4,8 +4,9 @@ An accessible Windows desktop tool for customizing Windows 10/11 install media b
 strip telemetry/bloat, pick which in-box apps to remove, inject drivers from your current PC, and add
 UEFI bootability to older install media where that's actually possible.
 
-**You must supply your own Windows ISO.** This tool edits a copy of media you already legitimately
-have (e.g. downloaded from microsoft.com) — it does not download, crack, or activate Windows.
+**You must supply your own Windows ISO** — either one you already have, or download one directly from
+Microsoft using the built-in "Download Windows" tab (see below). This tool does not crack or activate
+Windows, and does not use any third-party mirror.
 
 ## Prebuilt downloads
 
@@ -19,6 +20,15 @@ you'll still need the Windows ADK's `oscdimg.exe` — see below.
 
 ## What it does today
 
+- **Download an official Windows 10/11 ISO directly from Microsoft** (Home/Pro/Education) — the
+  "Download Windows" tab automates the same public handshake
+  microsoft.com/software-download's own page performs in a browser, the same approach the well-known
+  open-source tools [pbatard/Fido](https://github.com/pbatard/Fido) and Rufus use. No Microsoft
+  account, no third-party mirror, no paywalled licensing portal — every byte comes from Microsoft's own
+  CDN under a short-lived signed URL Microsoft itself issues. This only reaches the consumer flow;
+  Enterprise ISOs are gated behind paid Volume Licensing/MVS and are out of scope (see
+  `src/WinIsoOptimizer.Core/Download/WindowsIsoCatalog.cs` for exactly what's offered and why some
+  values there need periodic upkeep).
 - **Telemetry / privacy tweaks** — a curated set of registry policies (diagnostic data level,
   advertising ID, Cortana, consumer/"suggested apps" features, Copilot, feedback prompts), applied
   offline to the image's registry hives. See `src/WinIsoOptimizer.Core/Telemetry/TelemetryDebloatProfile.cs`
@@ -56,7 +66,7 @@ PowerShell's `Mount-DiskImage`/`Dismount-DiskImage`, none of which exist outside
   app's manifest already requests elevation).
 - **.NET 8 SDK** (or just the Desktop Runtime to run a published build).
 - **Windows ADK — "Deployment Tools" component** for `oscdimg.exe`, used to author the final bootable
-  ISO. This is the one piece Windows doesn't ship in-box. The "Kūrimas" tab has a built-in helper for
+  ISO. This is the one piece Windows doesn't ship in-box. The "Build" tab has a built-in helper for
   this: it opens Microsoft's official ADK download page in your browser (one click, not a hardcoded
   direct-download link — those are versioned per ADK release and go stale), then, once you point it at
   the `adksetup.exe` you downloaded, silently installs just the Deployment Tools feature
@@ -82,6 +92,12 @@ Windows desktop SDK pack. Build and run that project on an actual Windows machin
 
 ## Architecture
 
+- `Download/` — `MicrosoftIsoDownloadService` and `MicrosoftIsoDownloadProtocol`, which reimplement the
+  official microsoft.com/software-download public handshake (session whitelisting via
+  vlscppe.microsoft.com, the ov-df.microsoft.com challenge/response, then the
+  software-download-connector API) to fetch real Microsoft CDN download links; `WindowsIsoCatalog`
+  holds the current release/edition-ID table (sourced from, and needing the same periodic upkeep as,
+  [pbatard/Fido](https://github.com/pbatard/Fido)'s own table — see the file for details).
 - `Imaging/` — `DismService` (mount/unmount, list/remove apps, add/export drivers, cleanup),
   `OfflineRegistryService` (loads/edits/unloads the mounted image's registry hives), `IsoService`
   (extract via Mount-DiskImage + robocopy, rebuild via oscdimg), `ImageInspectionService` (read-only
@@ -104,8 +120,9 @@ Windows desktop SDK pack. Build and run that project on an actual Windows machin
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 44 tests run and pass without a Windows host or dism/oscdimg installed — they exercise argument
-construction, dism-output parsing, and error/cleanup ordering (e.g. "a registry hive is always
-unloaded even if a tweak fails, or dism unmount always runs even if servicing throws") against a fake
-process runner. The GUI project has no automated tests — it needs manual verification on Windows with
-a screen reader, see docs/ACCESSIBILITY.md.
+All 63 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
+argument construction, dism-output parsing, error/cleanup ordering (e.g. "a registry hive is always
+unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), and the
+Microsoft ISO-download protocol's URL construction/response parsing against a fake process runner and a
+fake `HttpMessageHandler`, respectively. The GUI project has no automated tests — it needs manual
+verification on Windows with a screen reader, see docs/ACCESSIBILITY.md.
