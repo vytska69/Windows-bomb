@@ -7,6 +7,7 @@ obj/
 ## Build output
 artifacts/
 publish/
+installer/Output/
 
 ## Rider/VS
 .vs/

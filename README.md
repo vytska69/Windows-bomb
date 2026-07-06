@@ -14,9 +14,17 @@ Every push to `main`/`master` is built and published automatically as a GitHub R
 [.github/workflows/build-and-release.yml](.github/workflows/build-and-release.yml)): Core is built and
 tested on Linux, then the whole solution — including the WPF app — is built and tested again on a
 Windows runner, published self-contained for `win-x64`, and attached to a new release named
-`build-<run number>`. Grab the latest one from the repo's **Releases** page, extract the zip, and run
-`WinIsoOptimizer.exe` as Administrator; no separate .NET install is required (it's self-contained), but
-you'll still need the Windows ADK's `oscdimg.exe` — see below.
+`build-<run number>` as two assets:
+
+- **`WinIsoOptimizer-Setup.exe`** (recommended) — a normal Windows installer built with
+  [Inno Setup](installer/WinIsoOptimizer.iss): Start Menu shortcut, optional desktop shortcut, an
+  Add/Remove Programs entry, and a proper uninstaller (Inno Setup generates that automatically — no
+  extra step needed to get one). Run it as Administrator.
+- **`WinIsoOptimizer-win-x64.zip`** — portable alternative, no install/uninstall needed: extract and
+  run `WinIsoOptimizer.exe` as Administrator.
+
+Either way, no separate .NET install is required (it's self-contained), but you'll still need the
+Windows ADK's `oscdimg.exe` — see below.
 
 ## What it does today
 
@@ -90,6 +98,14 @@ their tests on any OS with the .NET 8 SDK, including this repo's Linux CI/dev sa
 (`UseWindowsForms`), both of which only build on Windows — the WPF build tasks themselves require the
 Windows desktop SDK pack. Build and run that project on an actual Windows machine.
 
+Building the installer locally (optional — CI does this automatically) requires
+[Inno Setup](https://jrsoftware.org/isinfo.php) and a `dotnet publish` of the app first:
+
+```powershell
+dotnet publish src\WinIsoOptimizer.App\WinIsoOptimizer.App.csproj -c Release -r win-x64 --self-contained true -o publish\WinIsoOptimizer
+iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" installer\WinIsoOptimizer.iss
+```
+
 ## Architecture
 
 - `Download/` — `MicrosoftIsoDownloadService` and `MicrosoftIsoDownloadProtocol`, which reimplement the
@@ -113,6 +129,7 @@ Windows desktop SDK pack. Build and run that project on an actual Windows machin
   screen-reader-announced status line from the same stream.
 - `WinIsoOptimizer.App` — WPF GUI (MVVM, no external MVVM library), see
   [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) for the screen-reader-specific design choices.
+- `installer/WinIsoOptimizer.iss` — the Inno Setup script CI compiles into `WinIsoOptimizer-Setup.exe`.
 
 ## Testing
 

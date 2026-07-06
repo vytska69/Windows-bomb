@@ -59,7 +59,7 @@ jobs:
           --output publish/WinIsoOptimizer
           -p:PublishSingleFile=false
 
-      - name: Zip published output
+      - name: Zip published output (portable, no-install option)
         shell: pwsh
         run: Compress-Archive -Path publish/WinIsoOptimizer/* -DestinationPath WinIsoOptimizer-win-x64.zip
 
@@ -67,6 +67,21 @@ jobs:
         with:
           name: WinIsoOptimizer-win-x64
           path: WinIsoOptimizer-win-x64.zip
+          retention-days: 30
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          iscc.exe /DMyAppVersion=$version /DPublishDir="$PWD\publish\WinIsoOptimizer" installer\WinIsoOptimizer.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinIsoOptimizer-Setup
+          path: installer/Output/WinIsoOptimizer-Setup.exe
           retention-days: 30
 
   # Every push to main/master gets its own GitHub Release (not pull requests, not manual runs against
@@ -84,6 +99,10 @@ jobs:
         with:
           name: WinIsoOptimizer-win-x64
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: WinIsoOptimizer-Setup
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,6 +118,7 @@ jobs:
           fi
 
           gh release create "$tag" \
+            "WinIsoOptimizer-Setup.exe" \
             "WinIsoOptimizer-win-x64.zip" \
             --title "Build #${{ github.run_number }} ($short_sha)" \
-            --notes "Automated build from commit $short_sha on ${{ github.ref_name }}. Windows-only app: extract the zip and run WinIsoOptimizer.exe as Administrator (see README.md for requirements, incl. the Windows ADK's oscdimg.exe)."
+            --notes "Automated build from commit $short_sha on ${{ github.ref_name }}. **WinIsoOptimizer-Setup.exe**: normal Windows installer (Start Menu shortcut, Add/Remove Programs entry, proper uninstaller) — recommended for most users, run it as Administrator. **WinIsoOptimizer-win-x64.zip**: portable, no-install alternative — extract and run WinIsoOptimizer.exe as Administrator. Either way, see README.md for requirements (incl. the Windows ADK's oscdimg.exe)."
