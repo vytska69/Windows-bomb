@@ -56,9 +56,13 @@ PowerShell's `Mount-DiskImage`/`Dismount-DiskImage`, none of which exist outside
   app's manifest already requests elevation).
 - **.NET 8 SDK** (or just the Desktop Runtime to run a published build).
 - **Windows ADK — "Deployment Tools" component** for `oscdimg.exe`, used to author the final bootable
-  ISO. This is the one piece Windows doesn't ship in-box; download the ADK from Microsoft and install
-  just that component, then point the app at `oscdimg.exe` (Kūrimas/Build tab) if it's not at the
-  default path.
+  ISO. This is the one piece Windows doesn't ship in-box. The "Kūrimas" tab has a built-in helper for
+  this: it opens Microsoft's official ADK download page in your browser (one click, not a hardcoded
+  direct-download link — those are versioned per ADK release and go stale), then, once you point it at
+  the `adksetup.exe` you downloaded, silently installs just the Deployment Tools feature
+  (`adksetup.exe /quiet /features OptionId.DeploymentTools /norestart`) and re-checks for `oscdimg.exe`
+  automatically — no ADK setup wizard, no manually finding the right checkbox. You can still browse to
+  an existing `oscdimg.exe` manually instead if you already have one.
 
 ```powershell
 dotnet build .\WinIsoOptimizer.sln
@@ -86,6 +90,8 @@ Windows desktop SDK pack. Build and run that project on an actual Windows machin
 - `Drivers/` — export-from-running-system / inject-into-mounted-image.
 - `LegacyBoot/` — the Win7/Vista-SP1+ x64 UEFI fallback-bootloader fix, with an honest assessment of
   what is and isn't fixable this way.
+- `Setup/` — `AdkDeploymentToolsInstaller`, which drives the Windows ADK's own silent installer to get
+  `oscdimg.exe` without the user going through the ADK setup wizard (see the requirements section above).
 - `Jobs/IsoOptimizationJob` — orchestrates the full pipeline end to end, reporting progress through
   one `IProgress<OptimizationProgress>` callback so a GUI can drive a progress bar and a
   screen-reader-announced status line from the same stream.
@@ -98,7 +104,7 @@ Windows desktop SDK pack. Build and run that project on an actual Windows machin
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 38 tests run and pass without a Windows host or dism/oscdimg installed — they exercise argument
+All 44 tests run and pass without a Windows host or dism/oscdimg installed — they exercise argument
 construction, dism-output parsing, and error/cleanup ordering (e.g. "a registry hive is always
 unloaded even if a tweak fails, or dism unmount always runs even if servicing throws") against a fake
 process runner. The GUI project has no automated tests — it needs manual verification on Windows with

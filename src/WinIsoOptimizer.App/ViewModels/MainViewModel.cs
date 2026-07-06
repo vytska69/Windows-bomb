@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using WinIsoOptimizer.Core.Drivers;
 using WinIsoOptimizer.Core.Imaging;
 using WinIsoOptimizer.Core.Jobs;
 using WinIsoOptimizer.Core.LegacyBoot;
 using WinIsoOptimizer.Core.Processes;
+using WinIsoOptimizer.Core.Setup;
 using WinIsoOptimizer.Core.Telemetry;
 
 namespace WinIsoOptimizer.App.ViewModels;
@@ -21,18 +23,23 @@ public sealed class MainViewModel : ViewModelBase
         _job = new IsoOptimizationJob(new SystemProcessRunner(), _toolPaths);
 
         WorkingDirectory = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer");
-        OscdimgPath = _toolPaths.Oscdimg;
+        OscdimgPath = _toolPaths.Oscdimg; // setter also calls RefreshOscdimgStatus()
+        AdkSetupExePath = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer", "adksetup.exe");
 
         LoadSourceCommand = new RelayCommand(LoadSourceAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(SourceIsoPath));
         ExportDriversCommand = new RelayCommand(ExportDriversAsync, () => !IsBusy);
         RunCommand = new RelayCommand(RunAsync, () => !IsBusy && HasLoadedSource && !string.IsNullOrWhiteSpace(OutputIsoPath));
         CancelCommand = new RelayCommand(() => _runCancellation?.Cancel(), () => IsBusy);
+        OpenAdkDownloadPageCommand = new RelayCommand(OpenAdkDownloadPage);
+        InstallAdkDeploymentToolsCommand = new RelayCommand(InstallAdkDeploymentToolsAsync, () => !IsBusy && File.Exists(AdkSetupExePath));
     }
 
     public RelayCommand LoadSourceCommand { get; }
     public RelayCommand ExportDriversCommand { get; }
     public RelayCommand RunCommand { get; }
     public RelayCommand CancelCommand { get; }
+    public RelayCommand OpenAdkDownloadPageCommand { get; }
+    public RelayCommand InstallAdkDeploymentToolsCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
@@ -71,7 +78,31 @@ public sealed class MainViewModel : ViewModelBase
     public string OscdimgPath
     {
         get => _oscdimgPath;
-        set => SetField(ref _oscdimgPath, value);
+        set
+        {
+            if (SetField(ref _oscdimgPath, value))
+            {
+                // ExternalToolPaths is shared (by reference) with every Core service the running job
+                // uses, and each of them reads .Oscdimg fresh at the point of use — so updating it here
+                // is what actually makes a browsed-to path take effect, not just the display text.
+                _toolPaths.Oscdimg = value;
+                RefreshOscdimgStatus();
+            }
+        }
+    }
+
+    private string _adkSetupExePath = string.Empty;
+    public string AdkSetupExePath
+    {
+        get => _adkSetupExePath;
+        set => SetField(ref _adkSetupExePath, value);
+    }
+
+    private string _oscdimgStatusText = string.Empty;
+    public string OscdimgStatusText
+    {
+        get => _oscdimgStatusText;
+        set => SetField(ref _oscdimgStatusText, value);
     }
 
     private bool _isBusy;
@@ -170,6 +201,43 @@ public sealed class MainViewModel : ViewModelBase
     public bool ApplyLegacyUefiBootFix { get => _applyLegacyUefiBootFix; set => SetField(ref _applyLegacyUefiBootFix, value); }
 
     private string ExtractedFolder => Path.Combine(WorkingDirectory, "extracted");
+
+    private void RefreshOscdimgStatus()
+    {
+        OscdimgStatusText = AdkDeploymentToolsInstaller.IsOscdimgAvailable(_toolPaths)
+            ? $"Rasta: {_toolPaths.Oscdimg}"
+            : $"Nerasta: {_toolPaths.Oscdimg} — atsisiųskite Windows ADK ir įdiekite \"Deployment Tools\" komponentą (žr. žemiau).";
+    }
+
+    private static void OpenAdkDownloadPage()
+    {
+        // Opens the user's default browser at Microsoft's own, stable ADK download page. Intentionally
+        // not a direct binary download link — Microsoft's direct link is versioned per ADK release and
+        // changes over time, so hardcoding one here would eventually point at a stale/broken URL.
+        Process.Start(new ProcessStartInfo(AdkDeploymentToolsInstaller.OfficialAdkDownloadPageUrl) { UseShellExecute = true });
+    }
+
+    private async Task InstallAdkDeploymentToolsAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            Log("Diegiamas Windows ADK \"Deployment Tools\" komponentas (tyliai, be perkrovimo)...");
+            var found = await _job.AdkInstaller.InstallAndVerifyAsync(AdkSetupExePath, _toolPaths, new Progress<string>(Log)).ConfigureAwait(true);
+            RefreshOscdimgStatus();
+            Log(found
+                ? "oscdimg.exe sėkmingai rastas — ISO kūrimas dabar galimas."
+                : "Diegimas baigtas, bet oscdimg.exe vis tiek nerastas numatytoje vietoje — nurodykite jo kelią rankiniu būdu \"Kūrimas\" skirtuke.");
+        }
+        catch (Exception ex)
+        {
+            Log($"Klaida diegiant ADK Deployment Tools: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     private void Log(string message)
     {

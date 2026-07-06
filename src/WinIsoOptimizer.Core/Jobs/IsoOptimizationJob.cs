@@ -2,6 +2,7 @@ using WinIsoOptimizer.Core.Drivers;
 using WinIsoOptimizer.Core.Imaging;
 using WinIsoOptimizer.Core.LegacyBoot;
 using WinIsoOptimizer.Core.Processes;
+using WinIsoOptimizer.Core.Setup;
 using WinIsoOptimizer.Core.Telemetry;
 
 namespace WinIsoOptimizer.Core.Jobs;
@@ -28,14 +29,23 @@ public sealed class IsoOptimizationJob
     /// step independently of running the full optimization job.</summary>
     public DriverService Drivers => _drivers;
 
+    /// <summary>Gets oscdimg.exe (needed for the final ISO-authoring step) installed via the Windows
+    /// ADK's own silent installer, so a GUI can offer that instead of making the user hunt through the
+    /// ADK setup wizard themselves.</summary>
+    public AdkDeploymentToolsInstaller AdkInstaller { get; }
+
+    public ExternalToolPaths ToolPaths { get; }
+
     public IsoOptimizationJob(IProcessRunner runner, ExternalToolPaths? toolPaths = null)
     {
         var tools = toolPaths ?? new ExternalToolPaths();
+        ToolPaths = tools;
         _iso = new IsoService(runner, tools);
         _dism = new DismService(runner, tools);
         _debloat = new TelemetryDebloatService(new OfflineRegistryService(runner, tools), _dism);
         _drivers = new DriverService(_dism);
         Inspection = new ImageInspectionService(_dism);
+        AdkInstaller = new AdkDeploymentToolsInstaller(runner);
     }
 
     /// <summary>Extracts the source ISO (unless <paramref name="alreadyExtracted"/>) into

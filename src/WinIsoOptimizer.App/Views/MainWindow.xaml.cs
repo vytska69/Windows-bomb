@@ -81,6 +81,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BrowseAdkSetup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Pasirinkite atsisiųstą adksetup.exe",
+            Filter = "adksetup.exe|adksetup.exe|Vykdomieji failai (*.exe)|*.exe",
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            ViewModel.AdkSetupExePath = dialog.FileName;
+        }
+    }
+
     private void BrowseWorkingDirectory_Click(object sender, RoutedEventArgs e) =>
         BrowseFolder("Pasirinkite darbinį aplanką", path => ViewModel.WorkingDirectory = path);
 

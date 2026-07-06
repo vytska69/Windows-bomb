@@ -200,13 +200,39 @@
                              AutomationProperties.Name="ISO tomo etiketė" />
 
                     <Label Content="oscdimg.exe kelias (iš Windows ADK):" Target="{Binding ElementName=OscdimgBox}" />
-                    <DockPanel Margin="0,0,0,12">
+                    <DockPanel Margin="0,0,0,4">
                         <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
                                 Click="BrowseOscdimg_Click"
                                 AutomationProperties.Name="Naršyti oscdimg.exe failo" />
                         <TextBox x:Name="OscdimgBox" Text="{Binding OscdimgPath, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="oscdimg.exe kelias" />
                     </DockPanel>
+                    <TextBlock Text="{Binding OscdimgStatusText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               AutomationProperties.Name="oscdimg.exe būsena" />
+
+                    <GroupBox Header="Neturite oscdimg.exe? Įdiekite Windows ADK Deployment Tools čia" Margin="0,0,0,12"
+                              AutomationProperties.Name="Windows ADK Deployment Tools diegimo grupė">
+                        <StackPanel Margin="8">
+                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                                       Text="1) Atsidarykite oficialų Microsoft ADK atsisiuntimo puslapį ir atsisiųskite adksetup.exe. 2) Nurodykite atsisiųsto failo kelią žemiau. 3) Paspauskite „Įdiegti“ — Deployment Tools komponentas bus įdiegtas tyliai, be diegimo vedlio ir be perkrovimo." />
+                            <Button Content="Atidaryti ADK atsisiuntimo puslapį naršyklėje" Width="300" HorizontalAlignment="Left" Margin="0,0,0,8"
+                                    Command="{Binding OpenAdkDownloadPageCommand}"
+                                    AutomationProperties.Name="Atidaryti oficialų Windows ADK atsisiuntimo puslapį naršyklėje" />
+
+                            <Label Content="Atsisiųsto adksetup.exe kelias:" Target="{Binding ElementName=AdkSetupBox}" />
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Content="Naršyti..." Width="100" Margin="8,0,0,0"
+                                        Click="BrowseAdkSetup_Click"
+                                        AutomationProperties.Name="Naršyti adksetup.exe failo" />
+                                <TextBox x:Name="AdkSetupBox" Text="{Binding AdkSetupExePath, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="adksetup.exe kelias" />
+                            </DockPanel>
+
+                            <Button Content="Įdiegti Deployment Tools automatiškai" Width="260" HorizontalAlignment="Left"
+                                    Command="{Binding InstallAdkDeploymentToolsCommand}"
+                                    AutomationProperties.Name="Automatiškai tyliai įdiegti Windows ADK Deployment Tools komponentą" />
+                        </StackPanel>
+                    </GroupBox>
 
                     <StackPanel Orientation="Horizontal">
                         <Button Content="K_urti optimizuotą ISO" Width="200" Height="32" Margin="0,0,8,0"
