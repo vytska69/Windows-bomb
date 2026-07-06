@@ -93,7 +93,7 @@ public class IsoServiceTests : IDisposable
     {
         var runner = new FakeProcessRunner();
         runner.Responders["powershell.exe"] = request =>
-            request.Arguments[^1].Contains("Mount-DiskImage")
+            request.Arguments[^1].Contains("Get-Volume")
                 ? new ProcessResult(0, "D", "")
                 : new ProcessResult(0, "", "");
         runner.Responders["robocopy.exe"] = _ => new ProcessResult(16, "", "catastrophic error"); // >=8 means failure
@@ -103,14 +103,15 @@ public class IsoServiceTests : IDisposable
 
         await Assert.ThrowsAsync<ExternalToolException>(() => service.ExtractAsync(Path.Combine(_tempRoot, "fake.iso"), destination));
 
-        Assert.Equal(3, runner.Requests.Count);
+        Assert.Equal(4, runner.Requests.Count);
         Assert.Contains("Mount-DiskImage", runner.Requests[0].Arguments[^1]);
-        Assert.Equal("D:\\", runner.Requests[1].Arguments[0]);
-        Assert.Contains("Dismount-DiskImage", runner.Requests[2].Arguments[^1]);
+        Assert.Contains("Get-Volume", runner.Requests[1].Arguments[^1]);
+        Assert.Equal("D:\\", runner.Requests[2].Arguments[0]);
+        Assert.Contains("Dismount-DiskImage", runner.Requests[3].Arguments[^1]);
     }
 
     [Fact]
-    public async Task ExtractAsync_throws_clearly_when_drive_letter_cannot_be_determined()
+    public async Task ExtractAsync_dismounts_even_when_the_drive_letter_cannot_be_determined()
     {
         var runner = new FakeProcessRunner
         {
@@ -121,8 +122,31 @@ public class IsoServiceTests : IDisposable
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.ExtractAsync(Path.Combine(_tempRoot, "fake.iso"), Path.Combine(_tempRoot, "extracted")));
 
-        // Failure happens while determining the drive letter, before anything is mounted for real —
-        // so there is nothing to dismount and no copy should have been attempted.
+        // Mounting itself already succeeded (it would have thrown ExternalToolException otherwise), so
+        // the image must still be dismounted even though its drive letter couldn't be determined —
+        // otherwise a failed extraction leaves a stale mounted image behind.
+        Assert.Equal(3, runner.Requests.Count);
+        Assert.Contains("Mount-DiskImage", runner.Requests[0].Arguments[^1]);
+        Assert.Contains("Get-Volume", runner.Requests[1].Arguments[^1]);
+        Assert.Contains("Dismount-DiskImage", runner.Requests[2].Arguments[^1]);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_does_not_attempt_to_dismount_when_mounting_itself_fails()
+    {
+        var runner = new FakeProcessRunner();
+        runner.Responders["powershell.exe"] = request =>
+            request.Arguments[^1].Contains("Mount-DiskImage") && !request.Arguments[^1].Contains("Get-Volume")
+                ? new ProcessResult(1, "", "Mount-DiskImage : Access is denied. (Exception from HRESULT: 0x80070005 (E_ACCESSDENIED))")
+                : new ProcessResult(0, "", "");
+
+        var service = new IsoService(runner);
+
+        var ex = await Assert.ThrowsAsync<ExternalToolException>(() =>
+            service.ExtractAsync(Path.Combine(_tempRoot, "fake.iso"), Path.Combine(_tempRoot, "extracted")));
+
+        Assert.Contains("Access is denied", ex.Message);
+        // Nothing was actually mounted, so there is nothing to dismount and no copy should be attempted.
         Assert.Single(runner.Requests);
     }
 }

@@ -74,4 +74,65 @@ public class LegacyUefiBootInjectorTests : IDisposable
 
         Assert.Throws<InvalidOperationException>(() => LegacyUefiBootInjector.ApplyFallbackBootloaderFix(_tempRoot));
     }
+
+    [Fact]
+    public void ApplyUefiSevenChainload_throws_when_fallback_bootloader_is_missing()
+    {
+        var uefiSevenEfi = Path.Combine(_tempRoot, "uefiseven-download", "bootx64.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(uefiSevenEfi)!);
+        File.WriteAllText(uefiSevenEfi, "uefiseven bytes");
+
+        Assert.Throws<InvalidOperationException>(() => LegacyUefiBootInjector.ApplyUefiSevenChainload(_tempRoot, uefiSevenEfi));
+    }
+
+    [Fact]
+    public void ApplyUefiSevenChainload_preserves_the_real_bootloader_and_installs_uefiseven()
+    {
+        var msBootloader = Path.Combine(_tempRoot, "efi", "microsoft", "boot", "bootmgfw.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(msBootloader)!);
+        File.WriteAllText(msBootloader, "the real bootmgfw contents");
+        LegacyUefiBootInjector.ApplyFallbackBootloaderFix(_tempRoot);
+
+        var uefiSevenEfi = Path.Combine(_tempRoot, "uefiseven-download", "bootx64.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(uefiSevenEfi)!);
+        File.WriteAllText(uefiSevenEfi, "uefiseven chainload bytes");
+
+        LegacyUefiBootInjector.ApplyUefiSevenChainload(_tempRoot, uefiSevenEfi);
+
+        var fallback = Path.Combine(_tempRoot, "efi", "boot", "bootx64.efi");
+        var original = Path.Combine(_tempRoot, "efi", "boot", "bootx64.original.efi");
+        Assert.Equal("uefiseven chainload bytes", File.ReadAllText(fallback));
+        Assert.Equal("the real bootmgfw contents", File.ReadAllText(original));
+        Assert.True(LegacyUefiBootInjector.IsUefiSevenChainloadApplied(_tempRoot));
+    }
+
+    [Fact]
+    public void ApplyUefiSevenChainload_reapplied_with_a_newer_build_does_not_overwrite_the_preserved_original()
+    {
+        var msBootloader = Path.Combine(_tempRoot, "efi", "microsoft", "boot", "bootmgfw.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(msBootloader)!);
+        File.WriteAllText(msBootloader, "the real bootmgfw contents");
+        LegacyUefiBootInjector.ApplyFallbackBootloaderFix(_tempRoot);
+
+        var uefiSevenEfiV1 = Path.Combine(_tempRoot, "v1", "bootx64.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(uefiSevenEfiV1)!);
+        File.WriteAllText(uefiSevenEfiV1, "uefiseven v1");
+        LegacyUefiBootInjector.ApplyUefiSevenChainload(_tempRoot, uefiSevenEfiV1);
+
+        var uefiSevenEfiV2 = Path.Combine(_tempRoot, "v2", "bootx64.efi");
+        Directory.CreateDirectory(Path.GetDirectoryName(uefiSevenEfiV2)!);
+        File.WriteAllText(uefiSevenEfiV2, "uefiseven v2");
+        LegacyUefiBootInjector.ApplyUefiSevenChainload(_tempRoot, uefiSevenEfiV2);
+
+        var fallback = Path.Combine(_tempRoot, "efi", "boot", "bootx64.efi");
+        var original = Path.Combine(_tempRoot, "efi", "boot", "bootx64.original.efi");
+        Assert.Equal("uefiseven v2", File.ReadAllText(fallback));
+        Assert.Equal("the real bootmgfw contents", File.ReadAllText(original));
+    }
+
+    [Fact]
+    public void IsUefiSevenChainloadApplied_is_false_when_never_applied()
+    {
+        Assert.False(LegacyUefiBootInjector.IsUefiSevenChainloadApplied(_tempRoot));
+    }
 }

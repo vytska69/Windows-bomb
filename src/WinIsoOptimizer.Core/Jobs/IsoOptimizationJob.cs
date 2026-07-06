@@ -129,6 +129,12 @@ public sealed class IsoOptimizationJob
             {
                 Report(progress, "Applying legacy UEFI boot fix (adding \\EFI\\Boot\\bootx64.efi fallback loader)...", 82);
                 LegacyUefiBootInjector.ApplyFallbackBootloaderFix(extractedFolder, textProgress);
+
+                if (!string.IsNullOrEmpty(request.UefiSevenEfiPathToChainload))
+                {
+                    Report(progress, "Applying UefiSeven chainload (Int10h emulation for UEFI Class 3 hardware)...", 84);
+                    LegacyUefiBootInjector.ApplyUefiSevenChainload(extractedFolder, request.UefiSevenEfiPathToChainload, textProgress);
+                }
             }
             else
             {

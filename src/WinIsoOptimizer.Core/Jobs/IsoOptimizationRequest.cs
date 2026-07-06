@@ -40,5 +40,11 @@ public sealed record IsoOptimizationRequest
     /// than failing) when the media doesn't have a fixable case, since Win10/11 media never does.</summary>
     public bool ApplyLegacyUefiBootFixIfApplicable { get; init; } = true;
 
+    /// <summary>Path to a UefiSeven .efi bootloader (see <see cref="LegacyBoot.UefiSevenDownloadService"/>)
+    /// to chainload in front of the fallback bootloader, for Windows 7 media on "UEFI Class 3" hardware
+    /// with no Int10h support. Only applied when <see cref="ApplyLegacyUefiBootFixIfApplicable"/> is
+    /// true and the fallback fix actually applied to this media; null/empty skips it entirely.</summary>
+    public string? UefiSevenEfiPathToChainload { get; init; }
+
     public bool ForceUnsignedDrivers { get; init; }
 }

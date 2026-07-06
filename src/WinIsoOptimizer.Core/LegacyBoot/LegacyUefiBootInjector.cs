@@ -35,14 +35,23 @@ public static class LegacyUefiBootInjector
     /// it, Windows 7 can freeze at "Starting Windows" or fail with 0xc000000d even after the fallback-
     /// bootloader fix below gets its EFI bootloader found and running — that fix only solves "the
     /// firmware can find a bootloader," not "the bootloader's OS can actually finish booting." This
-    /// tool does not bundle or auto-apply UefiSeven itself: it ships as a compiled .efi binary with no
-    /// published license, so redistributing or auto-executing it isn't something to do without the
-    /// user's own informed review of the project. See docs/LEGACY-UEFI-BOOT.md.
+    /// project does not bundle, mirror, or redistribute a copy of UefiSeven itself — its repository
+    /// publishes no LICENSE file, so there is no stated permission for this project to do that.
+    /// <see cref="UefiSevenReleaseFetcher"/> and <see cref="UefiSevenDownloadService"/> instead fetch
+    /// the compiled binary directly from the upstream GitHub release, on explicit user request, the
+    /// same way a browser download would — and <see cref="ApplyUefiSevenChainload"/> only ever chainloads
+    /// it in front of the real bootloader (never replacing or modifying Windows's own files). See
+    /// docs/LEGACY-UEFI-BOOT.md.
     /// </summary>
     public const string UefiSevenProjectUrl = "https://github.com/manatails/uefiseven";
 
     private static readonly string[] MicrosoftEfiBootloaderRelativeSegments = { "efi", "microsoft", "boot", "bootmgfw.efi" };
     private static readonly string[] FallbackEfiBootloaderRelativeSegments = { "efi", "boot", "bootx64.efi" };
+
+    /// <summary>Name UefiSeven's own README instructs users to rename the real bootloader to before
+    /// installing UefiSeven in its place — reused here so the result looks exactly like a manual
+    /// install to anyone who knows the project's own convention.</summary>
+    private static readonly string[] OriginalBootloaderRelativeSegments = { "efi", "boot", "bootx64.original.efi" };
 
     public static LegacyUefiBootAssessment Assess(string extractedSourceFolder)
     {
@@ -99,6 +108,43 @@ public static class LegacyUefiBootInjector
         progress?.Report($"Copying \\{string.Join('\\', MicrosoftEfiBootloaderRelativeSegments)} -> \\{string.Join('\\', FallbackEfiBootloaderRelativeSegments)}...");
         File.Copy(msBootloaderPath, fallbackPath, overwrite: true);
     }
+
+    /// <summary>
+    /// Installs UefiSeven as a chainload in front of the fallback bootloader, following the exact steps
+    /// from the project's own README (steps 2–3, the install-media half — this tool never touches an
+    /// already-installed machine's hard drive, only extracted source media): the real bootloader is
+    /// preserved as \EFI\Boot\bootx64.original.efi, and UefiSeven's own compiled .efi takes over the
+    /// \EFI\Boot\bootx64.efi slot, so it runs first and chainloads to the real one afterwards. Requires
+    /// the fallback-bootloader fix to already be applied (\EFI\Boot\bootx64.efi must exist) — UefiSeven
+    /// solves a second, deeper problem (missing Int10h emulation on "UEFI Class 3" hardware), not the
+    /// "firmware can't find a bootloader" problem that fix addresses. Safe to call again with a newer
+    /// UefiSeven build: the preserved original is left alone on repeat calls.
+    /// </summary>
+    public static void ApplyUefiSevenChainload(string extractedSourceFolder, string uefiSevenEfiSourcePath, IProgress<string>? progress = null)
+    {
+        var fallbackPath = CombinePath(extractedSourceFolder, FallbackEfiBootloaderRelativeSegments);
+        if (!File.Exists(fallbackPath))
+        {
+            throw new InvalidOperationException(
+                "No \\EFI\\Boot\\bootx64.efi found on this media yet. Apply the fallback-bootloader fix " +
+                "first (see ApplyFallbackBootloaderFix) — UefiSeven chainloads in front of that bootloader, " +
+                "it does not replace the need for it.");
+        }
+
+        var originalPath = CombinePath(extractedSourceFolder, OriginalBootloaderRelativeSegments);
+        if (!File.Exists(originalPath))
+        {
+            progress?.Report($"Preserving the real bootloader as \\{string.Join('\\', OriginalBootloaderRelativeSegments)}...");
+            File.Move(fallbackPath, originalPath);
+        }
+
+        progress?.Report($"Installing UefiSeven as \\{string.Join('\\', FallbackEfiBootloaderRelativeSegments)} (chainloads to the preserved original)...");
+        File.Copy(uefiSevenEfiSourcePath, fallbackPath, overwrite: true);
+    }
+
+    /// <summary>True if <see cref="ApplyUefiSevenChainload"/> has already been applied to this media.</summary>
+    public static bool IsUefiSevenChainloadApplied(string extractedSourceFolder) =>
+        File.Exists(CombinePath(extractedSourceFolder, OriginalBootloaderRelativeSegments));
 
     private static string CombinePath(string root, string[] relativeSegments) =>
         Path.Combine(new[] { root }.Concat(relativeSegments).ToArray());

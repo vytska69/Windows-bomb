@@ -27,14 +27,24 @@ public sealed class IsoService
         Directory.CreateDirectory(destinationFolder);
 
         progress?.Report($"Mounting {isoPath}...");
-        var driveLetter = await MountAndGetDriveLetterAsync(isoPath, progress, ct).ConfigureAwait(false);
+        // $ErrorActionPreference = 'Stop' turns a Mount-DiskImage failure (bad path, corrupt ISO, no
+        // admin rights) into a terminating error, so it actually reaches us as a non-zero exit code
+        // with the real error text in stderr — without it, Mount-DiskImage's default non-terminating
+        // error is silently swallowed and this call reports success even though nothing got mounted.
+        await RunPowerShellAsync(
+            $"$ErrorActionPreference = 'Stop'; Mount-DiskImage -ImagePath '{EscapeForPowerShellSingleQuoted(isoPath)}'",
+            progress, ct).ConfigureAwait(false);
         try
         {
+            var driveLetter = await GetMountedDriveLetterAsync(isoPath, progress, ct).ConfigureAwait(false);
             progress?.Report($"Copying ISO contents from {driveLetter}:\\ to {destinationFolder}...");
             await RobocopyMirrorAsync($"{driveLetter}:\\", destinationFolder, progress, ct).ConfigureAwait(false);
         }
         finally
         {
+            // Mounting above already succeeded by this point (it would have thrown otherwise), so the
+            // image needs dismounting even if we failed to determine its drive letter — otherwise a
+            // failed extraction leaves a stale mounted image behind that can trip up the next attempt.
             progress?.Report("Dismounting ISO...");
             await RunPowerShellAsync($"Dismount-DiskImage -ImagePath '{EscapeForPowerShellSingleQuoted(isoPath)}'", progress, ct).ConfigureAwait(false);
         }
@@ -101,11 +111,24 @@ public sealed class IsoService
         }
     }
 
-    private async Task<string> MountAndGetDriveLetterAsync(string isoPath, IProgress<string>? progress, CancellationToken ct)
+    private async Task<string> GetMountedDriveLetterAsync(string isoPath, IProgress<string>? progress, CancellationToken ct)
     {
+        // Windows can take a moment to assign a drive letter after Mount-DiskImage returns, so this
+        // retries for up to 5 seconds instead of failing on the very first check. If Automount is
+        // disabled (common on imaging/deployment machines and some server builds), no drive letter is
+        // ever assigned at all — that's called out explicitly rather than left as a bare timeout.
         var script =
-            $"$img = Mount-DiskImage -ImagePath '{EscapeForPowerShellSingleQuoted(isoPath)}' -PassThru; " +
-            "($img | Get-Volume).DriveLetter";
+            "$ErrorActionPreference = 'Stop'; " +
+            $"$isoPath = '{EscapeForPowerShellSingleQuoted(isoPath)}'; " +
+            "$driveLetter = $null; " +
+            "for ($i = 0; $i -lt 10 -and -not $driveLetter; $i++) { " +
+            "if ($i -gt 0) { Start-Sleep -Milliseconds 500 }; " +
+            "$driveLetter = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter " +
+            "}; " +
+            "if (-not $driveLetter) { throw 'Windows did not assign a drive letter to the mounted ISO. " +
+            "This usually means Automount is disabled - run \"mountvol /E\" as Administrator (or " +
+            "diskpart > automount enable), then try again.' }; " +
+            "$driveLetter";
         var result = await RunPowerShellAsync(script, progress, ct).ConfigureAwait(false);
 
         var driveLetter = result.StandardOutput.Trim();

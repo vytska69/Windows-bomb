@@ -27,6 +27,8 @@ public sealed class MainViewModel : ViewModelBase
     private readonly IHttpDownloader _isoFileDownloader = new HttpDownloader();
     private readonly GitHubReleaseUpdateChecker _updateChecker = new(UpdateCheckOwner, UpdateCheckRepo);
     private readonly SelfUpdateService _selfUpdateService = new();
+    private readonly UefiSevenReleaseFetcher _uefiSevenReleaseFetcher = new();
+    private readonly UefiSevenDownloadService _uefiSevenDownloadService = new();
     private CancellationTokenSource? _runCancellation;
     private Task _appLoadTask = Task.CompletedTask;
     private string? _latestReleaseUrl;
@@ -59,6 +61,7 @@ public sealed class MainViewModel : ViewModelBase
         OpenReleasePageCommand = new RelayCommand(OpenReleasePage, () => _latestReleaseUrl is not null);
         UpdateNowCommand = new RelayCommand(UpdateNowAsync, () => !IsBusy && _latestInstallerUrl is not null && _latestInstallerSha256 is not null);
         OpenUefiSevenPageCommand = new RelayCommand(OpenUefiSevenPage);
+        DownloadUefiSevenCommand = new RelayCommand(DownloadUefiSevenAsync, () => !IsBusy);
 
         // Fire-and-forget: checks for a newer release the moment the app opens, without delaying the
         // window from appearing. Silent on failure (no internet, GitHub unreachable, rate-limited) —
@@ -78,6 +81,7 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand OpenReleasePageCommand { get; }
     public RelayCommand UpdateNowCommand { get; }
     public RelayCommand OpenUefiSevenPageCommand { get; }
+    public RelayCommand DownloadUefiSevenCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
@@ -276,6 +280,15 @@ public sealed class MainViewModel : ViewModelBase
     private bool _applyLegacyUefiBootFix = true;
     public bool ApplyLegacyUefiBootFix { get => _applyLegacyUefiBootFix; set => SetField(ref _applyLegacyUefiBootFix, value); }
 
+    private string _uefiSevenEfiPath = string.Empty;
+    public string UefiSevenEfiPath { get => _uefiSevenEfiPath; set => SetField(ref _uefiSevenEfiPath, value); }
+
+    private string _uefiSevenStatus = string.Empty;
+    public string UefiSevenStatus { get => _uefiSevenStatus; set => SetField(ref _uefiSevenStatus, value); }
+
+    private bool _applyUefiSevenChainloadOnBuild;
+    public bool ApplyUefiSevenChainloadOnBuild { get => _applyUefiSevenChainloadOnBuild; set => SetField(ref _applyUefiSevenChainloadOnBuild, value); }
+
     private string ExtractedFolder => Path.Combine(WorkingDirectory, "extracted");
 
     private void RefreshOscdimgStatus()
@@ -301,9 +314,55 @@ public sealed class MainViewModel : ViewModelBase
 
     private static void OpenUefiSevenPage()
     {
-        // UefiSeven is not bundled or auto-applied (unlicensed repo, firmware-level patch) — see
-        // docs/LEGACY-UEFI-BOOT.md. This just opens the project page for the user to review themselves.
+        // Opens the upstream project page for manual review. This app is not a mirror of UefiSeven and
+        // does not redistribute a copy of its own — see DownloadUefiSevenAsync for the opt-in flow that
+        // instead fetches the compiled binary directly from manatails/uefiseven's own GitHub release.
         Process.Start(new ProcessStartInfo(LegacyUefiBootInjector.UefiSevenProjectUrl) { UseShellExecute = true });
+    }
+
+    private async Task DownloadUefiSevenAsync()
+    {
+        var confirmed = System.Windows.MessageBox.Show(
+            "This downloads the compiled UefiSeven bootloader directly from its GitHub release " +
+            "(manatails/uefiseven) — this project does not host or redistribute a copy of it itself, " +
+            "since that repository publishes no LICENSE file granting redistribution rights. UefiSeven " +
+            "patches boot-critical firmware-level behavior; you're choosing to fetch and use it at your " +
+            "own discretion, the same as downloading it yourself from a browser. Continue?",
+            "Download UefiSeven",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        if (confirmed != System.Windows.MessageBoxResult.Yes) return;
+
+        IsBusy = true;
+        try
+        {
+            Log("Checking the latest UefiSeven release on GitHub...");
+            var release = await _uefiSevenReleaseFetcher.FetchLatestReleaseAsync().ConfigureAwait(true);
+            var asset = UefiSevenReleaseFetcher.SelectBootloaderAsset(release.Assets);
+            if (asset is null)
+            {
+                UefiSevenStatus = $"Release {release.TagName} has no .efi or .zip asset to download.";
+                Log(UefiSevenStatus);
+                return;
+            }
+
+            var destinationDirectory = Path.Combine(WorkingDirectory, "uefiseven");
+            var efiPath = await _uefiSevenDownloadService.DownloadBootloaderAsync(asset, destinationDirectory, new Progress<string>(Log)).ConfigureAwait(true);
+
+            UefiSevenEfiPath = efiPath;
+            ApplyUefiSevenChainloadOnBuild = true;
+            UefiSevenStatus = $"Downloaded UefiSeven {release.TagName} — it will be chainloaded in front of the fallback bootloader when the ISO is built.";
+            Log(UefiSevenStatus);
+        }
+        catch (Exception ex)
+        {
+            UefiSevenStatus = $"Could not download UefiSeven: {ex.Message}";
+            Log(UefiSevenStatus);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     private async Task CheckForUpdatesAsync()
@@ -325,11 +384,41 @@ public sealed class MainViewModel : ViewModelBase
             Log(_latestInstallerUrl is not null
                 ? $"{UpdateNotificationText} Click \"Update Now\" above to install it, or \"View update\" to open the release page."
                 : $"{UpdateNotificationText} Click \"View update\" above to download it.");
+
+            // The banner alone is easy to miss on a busy screen — pop up a dialog too, so an available
+            // update is something the user actually has to see and respond to, not just a passive row
+            // of buttons they might not notice.
+            await PromptForUpdateAsync().ConfigureAwait(true);
         }
         catch
         {
             // No internet, GitHub unreachable, rate-limited, etc. — routine for a tool that's often
             // run offline; not worth alarming the user over on every single launch.
+        }
+    }
+
+    private async Task PromptForUpdateAsync()
+    {
+        var canInstallDirectly = _latestInstallerUrl is not null
+            && SelfUpdateService.IsRunningFromInstalledLocation(AppContext.BaseDirectory);
+
+        var promptResult = System.Windows.MessageBox.Show(
+            $"A new version of Windows ISO Optimizer is available: {_latestVersionTag}.\n\n" +
+            (canInstallDirectly
+                ? "Download, verify, and install it now? This closes the app to finish installing (no setup wizard)."
+                : "Open the release page to download it?"),
+            "Update available",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information);
+        if (promptResult != System.Windows.MessageBoxResult.Yes) return;
+
+        if (canInstallDirectly)
+        {
+            await PerformUpdateAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            OpenReleasePage();
         }
     }
 
@@ -360,6 +449,13 @@ public sealed class MainViewModel : ViewModelBase
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question);
         if (confirmed != System.Windows.MessageBoxResult.Yes) return;
+
+        await PerformUpdateAsync().ConfigureAwait(true);
+    }
+
+    private async Task PerformUpdateAsync()
+    {
+        if (_latestInstallerUrl is null || _latestInstallerSha256 is null) return;
 
         IsBusy = true;
         try
@@ -627,6 +723,7 @@ public sealed class MainViewModel : ViewModelBase
                     ? new UnattendOptions { LocalAccountName = LocalAccountName, LocalAccountPassword = LocalAccountPassword }
                     : null,
                 ApplyLegacyUefiBootFixIfApplicable = ApplyLegacyUefiBootFix,
+                UefiSevenEfiPathToChainload = ApplyUefiSevenChainloadOnBuild && File.Exists(UefiSevenEfiPath) ? UefiSevenEfiPath : null,
             };
 
             await _job.RunAsync(request, MakeProgress(), _runCancellation.Token).ConfigureAwait(true);

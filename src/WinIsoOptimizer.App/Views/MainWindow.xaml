@@ -133,7 +133,26 @@
                     <Button Content="Learn about UefiSeven (Windows 7 Class 3 UEFI fix)" Width="320" HorizontalAlignment="Left" Margin="0,8,0,0"
                             Command="{Binding OpenUefiSevenPageCommand}"
                             AutomationProperties.Name="Open the UefiSeven project page"
-                            AutomationProperties.HelpText="Opens the manatails/uefiseven GitHub project in your browser. This tool does not bundle or auto-apply UefiSeven — see docs/LEGACY-UEFI-BOOT.md for why, and review the project yourself before using it." />
+                            AutomationProperties.HelpText="Opens the manatails/uefiseven GitHub project in your browser." />
+
+                    <Label Content="UefiSeven .efi bootloader:" Target="{Binding ElementName=UefiSevenEfiBox}" Margin="0,8,0,0" />
+                    <DockPanel Margin="0,0,0,4">
+                        <Button DockPanel.Dock="Right" Content="Browse..." Width="100" Margin="8,0,0,0"
+                                Click="BrowseUefiSevenEfi_Click"
+                                AutomationProperties.Name="Browse for a UefiSeven .efi file already on disk" />
+                        <TextBox x:Name="UefiSevenEfiBox" Text="{Binding UefiSevenEfiPath, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Path to the UefiSeven .efi bootloader" />
+                    </DockPanel>
+                    <Button Content="Download latest UefiSeven from GitHub" Width="320" HorizontalAlignment="Left" Margin="0,4,0,4"
+                            Command="{Binding DownloadUefiSevenCommand}"
+                            AutomationProperties.Name="Download the latest UefiSeven release from GitHub"
+                            AutomationProperties.HelpText="Fetches the compiled bootloader directly from manatails/uefiseven's own GitHub release, after a confirmation prompt. This project does not host or redistribute a copy of it itself." />
+                    <CheckBox Content="Chainload UefiSeven when building the ISO (Windows 7 UEFI Class 3 Int10h fix)" Margin="0,4,0,0"
+                              IsChecked="{Binding ApplyUefiSevenChainloadOnBuild}"
+                              AutomationProperties.HelpText="Only takes effect together with the legacy UEFI boot fix above, on Windows 7 x64 / Vista SP1+ x64 media." />
+                    <TextBlock Text="{Binding UefiSevenStatus}" TextWrapping="Wrap" Margin="0,4,0,0"
+                               AutomationProperties.Name="UefiSeven download status"
+                               AutomationProperties.LiveSetting="Polite" />
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>

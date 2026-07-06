@@ -72,6 +72,12 @@ See `src/WinIsoOptimizer.Core/Updates/GitHubReleaseUpdateChecker.cs` and `SelfUp
   needed (Secure Boot must be off in firmware — see [docs/LEGACY-UEFI-BOOT.md](docs/LEGACY-UEFI-BOOT.md)
   for exactly what this can and can't do, including why **Windows XP and Vista RTM cannot be made to
   boot via UEFI at all** — Microsoft never shipped the components for it).
+- **Optional UefiSeven chainload** for Windows 7 on "UEFI Class 3" hardware (no CSM at all), which
+  needs more than the fallback loader above — Windows 7 also depends on a legacy Int10h video
+  interrupt that doesn't exist there. Opt-in and confirmation-gated: the GUI can fetch the latest
+  manatails/uefiseven release directly from GitHub (not redistributed by this project — see
+  [docs/LEGACY-UEFI-BOOT.md](docs/LEGACY-UEFI-BOOT.md)) and chainload it in front of the fallback
+  bootloader when building the ISO.
 
 ## What it deliberately does not do
 
@@ -156,7 +162,7 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 119 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
+All 133 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
 argument construction, dism-output parsing, error/cleanup ordering (e.g. "a registry hive is always
 unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), the
 Microsoft ISO-download protocol's URL construction/response parsing, the update-check's build-number

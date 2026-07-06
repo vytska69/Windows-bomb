@@ -108,6 +108,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BrowseUefiSevenEfi_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Select a UefiSeven .efi bootloader you've already downloaded and reviewed",
+            Filter = "EFI bootloader (*.efi)|*.efi|All files (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            ViewModel.UefiSevenEfiPath = dialog.FileName;
+        }
+    }
+
     private void BrowseWorkingDirectory_Click(object sender, RoutedEventArgs e) =>
         BrowseFolder("Select the working folder", path => ViewModel.WorkingDirectory = path);
 

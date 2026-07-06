@@ -55,15 +55,27 @@ the problem). Its own instructions cover two separate swaps: one on the install 
 machine's hard drive after first reboot (`\EFI\Microsoft\Boot\bootmgfw.efi`, which this tool cannot
 reach — it only ever touches install media, never a machine's already-installed OS drive).
 
-**This tool does not download, bundle, or auto-apply UefiSeven.** Two reasons, both concrete rather
-than reflexive caution:
+**This tool does not bundle, mirror, or redistribute a copy of UefiSeven itself.** The repository ships
+no LICENSE file, so there are no stated terms for this project to redistribute its compiled binary. What
+it does instead, entirely opt-in and behind an explicit confirmation prompt (Source tab):
 
-1. The repository ships no LICENSE file — there are no stated terms for redistributing or
-   auto-executing its compiled binary from another project.
-2. It patches the boot chain at the firmware level. That's exactly the kind of change this tool can't
-   verify the outcome of in an automated test (a wrong patch there doesn't throw an exception, it just
-   leaves a machine unable to boot) — the user reviewing the project and applying it themselves, with
-   the ability to make an informed judgment call, is the appropriate level of caution.
+- `UefiSevenReleaseFetcher` queries GitHub's public API for manatails/uefiseven's latest release —
+  the same request a browser makes, not something this project caches or re-hosts.
+- `UefiSevenDownloadService` downloads the asset it finds (unpacking it first if it's a `.zip`) and
+  returns the path to the `.efi` file inside — the download goes straight from GitHub to the user's own
+  machine.
+- `LegacyUefiBootInjector.ApplyUefiSevenChainload()` then follows the project's own README exactly:
+  the fallback bootloader that `ApplyFallbackBootloaderFix()` put at `\EFI\Boot\bootx64.efi` is renamed
+  to `\EFI\Boot\bootx64.original.efi` (UefiSeven's own naming convention), and UefiSeven's binary takes
+  its place — so UefiSeven runs first and chainloads to the real bootloader afterwards. No Windows file
+  is patched or replaced; the swap is confined to files this tool already writes.
+
+This still doesn't remove the second reason for caution: UefiSeven patches the boot chain at the
+firmware level, which is exactly the kind of change this tool can't verify the outcome of in an
+automated test (a wrong patch there doesn't throw an exception, it just leaves a machine unable to
+boot). That's why the download step requires an explicit confirmation, why the GUI also always offers a
+plain link to the upstream project for manual review, and why this tool never applies the chainload
+without the user first opting in per build.
 
 If your target hardware is Class 3 (no CSM/legacy option in firmware at all) and you're installing
 Windows 7 or Vista, expect to need UefiSeven (or an equivalent Int10h shim) in addition to, not instead
