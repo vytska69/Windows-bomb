@@ -7,6 +7,16 @@ UEFI bootability to older install media where that's actually possible.
 **You must supply your own Windows ISO.** This tool edits a copy of media you already legitimately
 have (e.g. downloaded from microsoft.com) — it does not download, crack, or activate Windows.
 
+## Prebuilt downloads
+
+Every push to `main`/`master` is built and published automatically as a GitHub Release (see
+[.github/workflows/build-and-release.yml](.github/workflows/build-and-release.yml)): Core is built and
+tested on Linux, then the whole solution — including the WPF app — is built and tested again on a
+Windows runner, published self-contained for `win-x64`, and attached to a new release named
+`build-<run number>`. Grab the latest one from the repo's **Releases** page, extract the zip, and run
+`WinIsoOptimizer.exe` as Administrator; no separate .NET install is required (it's self-contained), but
+you'll still need the Windows ADK's `oscdimg.exe` — see below.
+
 ## What it does today
 
 - **Telemetry / privacy tweaks** — a curated set of registry policies (diagnostic data level,

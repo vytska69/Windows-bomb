@@ -1,0 +1,104 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Core/Core.Tests target plain net8.0 with no Windows-specific dependencies, so they're verified
+  # on Linux first for fast feedback — this also runs on pull requests, which never publish a release.
+  test-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build Core.Tests (also builds the referenced Core project)
+        run: dotnet build src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj --configuration Release
+
+      - name: Test Core
+        run: dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj --configuration Release --no-build
+
+  # WinIsoOptimizer.App targets net8.0-windows/WPF, which only builds where the Windows Desktop SDK
+  # pack is available — i.e. on a Windows runner, never on Linux/macOS.
+  build-windows:
+    needs: test-core
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore full solution
+        run: dotnet restore WinIsoOptimizer.sln
+
+      - name: Build full solution (Release)
+        run: dotnet build WinIsoOptimizer.sln --configuration Release --no-restore
+
+      - name: Test Core on Windows
+        run: dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj --configuration Release --no-build
+
+      - name: Publish WinIsoOptimizer.App (self-contained win-x64)
+        run: >
+          dotnet publish src/WinIsoOptimizer.App/WinIsoOptimizer.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output publish/WinIsoOptimizer
+          -p:PublishSingleFile=false
+
+      - name: Zip published output
+        shell: pwsh
+        run: Compress-Archive -Path publish/WinIsoOptimizer/* -DestinationPath WinIsoOptimizer-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinIsoOptimizer-win-x64
+          path: WinIsoOptimizer-win-x64.zip
+          retention-days: 30
+
+  # Every push to main/master gets its own GitHub Release (not pull requests, not manual runs against
+  # other branches) — per user preference, no version tag is needed, the build number identifies it.
+  release:
+    needs: build-windows
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: WinIsoOptimizer-win-x64
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          short_sha="$(git rev-parse --short HEAD)"
+          tag="build-${{ github.run_number }}"
+
+          # Idempotent: a manually re-run workflow reuses the same run_number/tag, so clear any
+          # existing release+tag first rather than failing on "release already exists".
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+
+          gh release create "$tag" \
+            "WinIsoOptimizer-win-x64.zip" \
+            --title "Build #${{ github.run_number }} ($short_sha)" \
+            --notes "Automated build from commit $short_sha on ${{ github.ref_name }}. Windows-only app: extract the zip and run WinIsoOptimizer.exe as Administrator (see README.md for requirements, incl. the Windows ADK's oscdimg.exe)."
