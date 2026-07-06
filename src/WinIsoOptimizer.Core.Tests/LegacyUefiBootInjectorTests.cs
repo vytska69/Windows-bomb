@@ -31,6 +31,10 @@ public class LegacyUefiBootInjectorTests : IDisposable
         var assessment = LegacyUefiBootInjector.Assess(_tempRoot);
 
         Assert.Equal(LegacyUefiBootSupport.FixableFallbackBootloaderMissing, assessment.Support);
+        // The fallback-bootloader fix only solves "firmware can't find a bootloader" — it must not
+        // imply Windows 7 will fully boot on CSM-less ("UEFI Class 3") hardware, which needs the
+        // separate Int10h emulation fix (UefiSeven) this tool doesn't auto-apply.
+        Assert.Contains("UefiSeven", assessment.Explanation);
     }
 
     [Fact]

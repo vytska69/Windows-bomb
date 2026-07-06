@@ -156,7 +156,7 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 88 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
+All 119 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
 argument construction, dism-output parsing, error/cleanup ordering (e.g. "a registry hive is always
 unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), the
 Microsoft ISO-download protocol's URL construction/response parsing, the update-check's build-number

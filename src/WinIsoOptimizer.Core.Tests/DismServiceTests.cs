@@ -47,6 +47,65 @@ public class DismServiceTests
         The operation completed successfully.
         """;
 
+    private const string SampleWimImageDetailsOutput = """
+        Deployment Image Servicing and Management tool
+        Version: 10.0.19041.844
+
+        Details for image : D:\sources\install.wim
+
+        Index : 2
+        Name : Windows 10 Pro
+        Description : Windows 10 Pro
+        Size : 15,507,201,004 bytes
+        WIM Bootable : Yes
+        Architecture : x64
+        Hal :
+        Version : 10.0.19045
+        ServicePack Build : 1.0
+        ServicePack Level :
+        Edition ID : Professional
+        Installation Type : Client
+        Product Type : WinNT
+        Product Suite : Terminal Server
+        System Root : WINDOWS
+        Languages :
+            en-US (Default)
+
+        The operation completed successfully.
+        """;
+
+    [Fact]
+    public void ParseWimImageDetails_extracts_version_edition_and_installation_type()
+    {
+        var details = DismService.ParseWimImageDetails(SampleWimImageDetailsOutput);
+
+        Assert.NotNull(details);
+        Assert.Equal(2, details!.Index);
+        Assert.Equal("Windows 10 Pro", details.Name);
+        Assert.Equal("10.0.19045", details.Version);
+        Assert.Equal("Professional", details.EditionId);
+        Assert.Equal("Client", details.InstallationType);
+        Assert.Equal("x64", details.Architecture);
+    }
+
+    [Fact]
+    public void ParseWimImageDetails_returns_null_when_output_has_no_recognizable_index()
+    {
+        Assert.Null(DismService.ParseWimImageDetails("garbage output with no fields"));
+    }
+
+    [Fact]
+    public async Task GetWimImageDetailsAsync_builds_expected_dism_arguments()
+    {
+        var runner = new FakeProcessRunner { DefaultResult = new(0, SampleWimImageDetailsOutput, "") };
+        var service = new DismService(runner);
+
+        await service.GetWimImageDetailsAsync(@"C:\iso\sources\install.wim", 2);
+
+        var request = Assert.Single(runner.Requests);
+        Assert.Equal(new[] { "/Get-WimInfo", @"/WimFile:C:\iso\sources\install.wim", "/Index:2" }, request.Arguments);
+    }
+
     [Fact]
     public void ParseWimInfo_extracts_every_index()
     {

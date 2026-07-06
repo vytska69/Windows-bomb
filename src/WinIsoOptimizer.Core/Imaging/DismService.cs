@@ -26,6 +26,15 @@ public sealed class DismService
         return ParseWimInfo(result.StandardOutput);
     }
 
+    /// <summary>Queries one index directly (no mount needed — `/Get-WimInfo` reads WIM metadata, it
+    /// doesn't need `/Image:`) for the extra detail the plain listing above doesn't include, notably
+    /// the NT kernel version needed to reliably tell Windows 10 from 11 (see <see cref="WindowsVersionClassifier"/>).</summary>
+    public async Task<WimImageDetails?> GetWimImageDetailsAsync(string wimPath, int index, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var result = await RunDismAsync(new[] { "/Get-WimInfo", $"/WimFile:{wimPath}", $"/Index:{index}" }, progress, ct).ConfigureAwait(false);
+        return ParseWimImageDetails(result.StandardOutput);
+    }
+
     public async Task MountImageAsync(string wimPath, int index, string mountDirectory, bool readOnly = false, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         Directory.CreateDirectory(mountDirectory);
@@ -181,6 +190,56 @@ public sealed class DismService
 
         FlushIfComplete();
         return images;
+    }
+
+    /// <summary>Parses the extended single-index form of `dism /Get-WimInfo /WimFile:X /Index:N`.
+    /// Field names below (Version, Edition ID, Installation Type, Architecture) follow DISM's
+    /// documented output for this command; tolerant of missing fields since exact wording has some
+    /// history of drifting slightly across Windows/ADK versions — a field this doesn't recognize is
+    /// just left null rather than treated as a parse failure.</summary>
+    internal static WimImageDetails? ParseWimImageDetails(string dismOutput)
+    {
+        int? index = null;
+        string? name = null;
+        string? version = null;
+        string? editionId = null;
+        string? installationType = null;
+        string? architecture = null;
+
+        foreach (var rawLine in dismOutput.Split('\n'))
+        {
+            var line = rawLine.Trim('\r', '\n', ' ');
+            if (line.Length == 0) continue;
+
+            var (key, value) = SplitKeyValue(line);
+            if (key is null) continue;
+
+            switch (key)
+            {
+                case "Index":
+                    index = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : index;
+                    break;
+                case "Name":
+                    name = value;
+                    break;
+                case "Version":
+                    version = value;
+                    break;
+                case "Edition ID":
+                    editionId = value;
+                    break;
+                case "Installation Type":
+                    installationType = value;
+                    break;
+                case "Architecture":
+                    architecture = value;
+                    break;
+            }
+        }
+
+        return index is not null && name is not null
+            ? new WimImageDetails(index.Value, name, version, editionId, installationType, architecture)
+            : null;
     }
 
     internal static IReadOnlyList<ProvisionedAppxPackage> ParseProvisionedAppxPackages(string dismOutput)

@@ -28,6 +28,19 @@ public sealed record LegacyUefiBootAssessment(LegacyUefiBootSupport Support, str
 /// </summary>
 public static class LegacyUefiBootInjector
 {
+    /// <summary>
+    /// manatails/uefiseven — a chainloading .efi that emulates the legacy BIOS Int10h video interrupt
+    /// Windows 7's early boot/graphics init calls, which simply doesn't exist on "UEFI Class 3"
+    /// firmware (no CSM at all — the norm on hardware from roughly the last several years). Without
+    /// it, Windows 7 can freeze at "Starting Windows" or fail with 0xc000000d even after the fallback-
+    /// bootloader fix below gets its EFI bootloader found and running — that fix only solves "the
+    /// firmware can find a bootloader," not "the bootloader's OS can actually finish booting." This
+    /// tool does not bundle or auto-apply UefiSeven itself: it ships as a compiled .efi binary with no
+    /// published license, so redistributing or auto-executing it isn't something to do without the
+    /// user's own informed review of the project. See docs/LEGACY-UEFI-BOOT.md.
+    /// </summary>
+    public const string UefiSevenProjectUrl = "https://github.com/manatails/uefiseven";
+
     private static readonly string[] MicrosoftEfiBootloaderRelativeSegments = { "efi", "microsoft", "boot", "bootmgfw.efi" };
     private static readonly string[] FallbackEfiBootloaderRelativeSegments = { "efi", "boot", "bootx64.efi" };
 
@@ -48,7 +61,12 @@ public static class LegacyUefiBootInjector
                 "(typical for Windows 7 x64 and Windows Vista SP1+ x64 media). Copying the former to the " +
                 "latter lets UEFI firmware find it with no NVRAM boot entry needed. Secure Boot must be " +
                 "disabled in firmware first — this bootloader predates Secure Boot and is not in the " +
-                "Microsoft-signed allow list on modern firmware.");
+                "Microsoft-signed allow list on modern firmware. Note this only fixes firmware *finding* " +
+                "a bootloader — on newer \"UEFI Class 3\" hardware with no CSM at all, Windows 7 setup can " +
+                "still freeze at \"Starting Windows\" or fail with 0xc000000d because it separately needs a " +
+                "legacy BIOS Int10h video interrupt that doesn't exist there; projects like UefiSeven " +
+                "(" + UefiSevenProjectUrl + ") exist specifically for that second, deeper problem — this " +
+                "tool doesn't apply that fix automatically, see docs/LEGACY-UEFI-BOOT.md.");
         }
 
         return new LegacyUefiBootAssessment(LegacyUefiBootSupport.Unsupported,

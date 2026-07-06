@@ -91,6 +91,7 @@
 
             <!-- ============================ SOURCE ============================ -->
             <TabItem Header="_Source">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="12">
                     <Label Content="Windows ISO file:" Target="{Binding ElementName=SourceIsoBox}" />
                     <DockPanel Margin="0,0,0,8">
@@ -122,10 +123,19 @@
                              DisplayMemberPath="Name"
                              AutomationProperties.Name="Windows editions in this ISO" />
 
+                    <TextBlock Text="Detected Windows version:" FontWeight="Bold" Margin="0,8,0,2" />
+                    <TextBlock Text="{Binding DetectedWindowsVersionText}" TextWrapping="Wrap"
+                               AutomationProperties.Name="Detected Windows version from the ISO" />
+
                     <TextBlock Text="Legacy-OS (7 / Vista / XP / 8.1) UEFI boot check:" FontWeight="Bold" Margin="0,8,0,2" />
                     <TextBlock Text="{Binding LegacyUefiBootStatus}" TextWrapping="Wrap"
                                AutomationProperties.Name="Legacy-OS UEFI boot check result" />
+                    <Button Content="Learn about UefiSeven (Windows 7 Class 3 UEFI fix)" Width="320" HorizontalAlignment="Left" Margin="0,8,0,0"
+                            Command="{Binding OpenUefiSevenPageCommand}"
+                            AutomationProperties.Name="Open the UefiSeven project page"
+                            AutomationProperties.HelpText="Opens the manatails/uefiseven GitHub project in your browser. This tool does not bundle or auto-apply UefiSeven — see docs/LEGACY-UEFI-BOOT.md for why, and review the project yourself before using it." />
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- ============================ TELEMETRY / OPTIMIZATION ============================ -->
@@ -193,6 +203,7 @@
 
             <!-- ============================ DRIVERS ============================ -->
             <TabItem Header="D_rivers">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="12">
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
                                Text="You can pull every third-party driver from the Windows install you're currently running and inject them into the ISO, so the new install immediately recognizes this PC's hardware." />
@@ -225,10 +236,12 @@
                               IsChecked="{Binding ForceUnsignedDrivers}" Margin="0,4"
                               IsEnabled="{Binding InjectDrivers}" />
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- ============================ UNATTEND / LOCAL ACCOUNT ============================ -->
             <TabItem Header="_Local Account">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="12">
                     <CheckBox IsChecked="{Binding GenerateUnattend}" Margin="0,0,0,12">
                         <TextBlock Text="Create autounattend.xml: local account instead of a forced Microsoft account, skip privacy/telemetry OOBE screens"
@@ -249,10 +262,12 @@
                                    Text="Note: the password in autounattend.xml is only obfuscated (Base64), not truly protected — handle this ISO/file as carefully as you would any file containing a password." />
                     </StackPanel>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- ============================ BUILD ============================ -->
             <TabItem Header="_Build">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="12">
                     <Label Content="Output ISO file:" Target="{Binding ElementName=OutputIsoBox}" />
                     <DockPanel Margin="0,0,0,8">
@@ -313,6 +328,7 @@
                                 AutomationProperties.Name="Cancel the running operation" />
                     </StackPanel>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 

@@ -33,6 +33,7 @@ public sealed class MainViewModel : ViewModelBase
     private string? _latestInstallerUrl;
     private string? _latestInstallerSha256;
     private string? _latestVersionTag;
+    private WindowsMajorVersion _detectedWindowsVersion = WindowsMajorVersion.Unknown;
 
     public MainViewModel()
     {
@@ -57,6 +58,7 @@ public sealed class MainViewModel : ViewModelBase
         DownloadIsoCommand = new RelayCommand(DownloadIsoAsync, () => !IsBusy && SelectedDownloadLink is not null && !string.IsNullOrWhiteSpace(IsoDownloadDestinationPath));
         OpenReleasePageCommand = new RelayCommand(OpenReleasePage, () => _latestReleaseUrl is not null);
         UpdateNowCommand = new RelayCommand(UpdateNowAsync, () => !IsBusy && _latestInstallerUrl is not null && _latestInstallerSha256 is not null);
+        OpenUefiSevenPageCommand = new RelayCommand(OpenUefiSevenPage);
 
         // Fire-and-forget: checks for a newer release the moment the app opens, without delaying the
         // window from appearing. Silent on failure (no internet, GitHub unreachable, rate-limited) —
@@ -75,6 +77,7 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand DownloadIsoCommand { get; }
     public RelayCommand OpenReleasePageCommand { get; }
     public RelayCommand UpdateNowCommand { get; }
+    public RelayCommand OpenUefiSevenPageCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
@@ -193,6 +196,13 @@ public sealed class MainViewModel : ViewModelBase
         set => SetField(ref _legacyUefiBootStatus, value);
     }
 
+    private string _detectedWindowsVersionText = string.Empty;
+    public string DetectedWindowsVersionText
+    {
+        get => _detectedWindowsVersionText;
+        set => SetField(ref _detectedWindowsVersionText, value);
+    }
+
     // --- Update check ---
     private bool _isUpdateAvailable;
     public bool IsUpdateAvailable
@@ -287,6 +297,13 @@ public sealed class MainViewModel : ViewModelBase
     {
         if (_latestReleaseUrl is null) return;
         Process.Start(new ProcessStartInfo(_latestReleaseUrl) { UseShellExecute = true });
+    }
+
+    private static void OpenUefiSevenPage()
+    {
+        // UefiSeven is not bundled or auto-applied (unlicensed repo, firmware-level patch) — see
+        // docs/LEGACY-UEFI-BOOT.md. This just opens the project page for the user to review themselves.
+        Process.Start(new ProcessStartInfo(LegacyUefiBootInjector.UefiSevenProjectUrl) { UseShellExecute = true });
     }
 
     private async Task CheckForUpdatesAsync()
@@ -519,6 +536,8 @@ public sealed class MainViewModel : ViewModelBase
         var selectedEdition = SelectedEdition;
         if (selectedEdition is null) return;
         AvailableApps.Clear();
+        _detectedWindowsVersion = WindowsMajorVersion.Unknown;
+        DetectedWindowsVersionText = string.Empty;
         try
         {
             var wimPath = Path.Combine(ExtractedFolder, "sources", "install.wim");
@@ -536,6 +555,20 @@ public sealed class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             Log($"Could not read the list of apps: {ex.Message}");
+        }
+
+        try
+        {
+            var wimPath = Path.Combine(ExtractedFolder, "sources", "install.wim");
+            var details = await _job.Inspection.GetImageDetailsAsync(wimPath, selectedEdition.Index, new Progress<string>(Log)).ConfigureAwait(true);
+            _detectedWindowsVersion = WindowsVersionClassifier.Classify(details?.Version);
+            DetectedWindowsVersionText = _detectedWindowsVersion == WindowsMajorVersion.Unknown
+                ? $"Could not determine the exact Windows version (raw NT version: {details?.Version ?? "unknown"})."
+                : $"Detected: {WindowsVersionClassifier.ToDisplayName(_detectedWindowsVersion)} (NT version {details?.Version}, edition {details?.EditionId ?? selectedEdition.Name}).";
+        }
+        catch (Exception ex)
+        {
+            Log($"Could not determine the exact Windows version: {ex.Message}");
         }
     }
 

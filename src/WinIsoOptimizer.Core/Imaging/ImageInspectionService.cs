@@ -18,6 +18,11 @@ public sealed class ImageInspectionService
     public Task<IReadOnlyList<WimImageInfo>> ListEditionsAsync(string wimPath, IProgress<string>? progress = null, CancellationToken ct = default) =>
         _dism.GetWimInfoAsync(wimPath, progress, ct);
 
+    /// <summary>No mount needed — reads WIM metadata directly. See <see cref="WindowsVersionClassifier"/>
+    /// to turn <see cref="WimImageDetails.Version"/> into a marketing OS name (Windows 7/10/11/...).</summary>
+    public Task<WimImageDetails?> GetImageDetailsAsync(string wimPath, int index, IProgress<string>? progress = null, CancellationToken ct = default) =>
+        _dism.GetWimImageDetailsAsync(wimPath, index, progress, ct);
+
     public async Task<IReadOnlyList<ProvisionedAppxPackage>> ListProvisionedAppsAsync(string wimPath, int index, string scratchMountDirectory, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         Directory.CreateDirectory(scratchMountDirectory);
