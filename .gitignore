@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+
+## Build output
+artifacts/
+publish/
+
+## Rider/VS
+.vs/
+.idea/
+*.DotSettings.user
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Working directories the tool creates at runtime (mounted ISO contents, WIM mounts, exported drivers)
+work/
+*.iso
+*.wim
+*.esd

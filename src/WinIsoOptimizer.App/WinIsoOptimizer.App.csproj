@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project targets net8.0-windows/WPF and can only be built on Windows
+    (the WPF build tasks and UI Automation APIs it depends on are Windows-only).
+    See the top-level README.md ("Requirements to build/run") for how to build and run it.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Only for System.Windows.Forms.FolderBrowserDialog — WPF itself has no folder picker. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>WinIsoOptimizer.App</RootNamespace>
+    <AssemblyName>WinIsoOptimizer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WinIsoOptimizer.Core\WinIsoOptimizer.Core.csproj" />
+  </ItemGroup>
+
+</Project>
