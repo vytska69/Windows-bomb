@@ -62,6 +62,13 @@ The full history of every status line is also kept in a plain `ListBox` (`LogMes
 region, so a screen reader user can review everything that happened after the fact, not just the most
 recent line.
 
+The update-available banner's own `TextBlock` also carries `AutomationProperties.LiveSetting="Polite"`,
+but — per the same caveat above — that alone doesn't make WPF raise the UIA event, and this one isn't
+individually wired up the way `StatusLiveRegion` is. It doesn't need to be: `CheckForUpdatesAsync` calls
+`Log(...)` when it finds a newer release, which sets `StatusMessage` too, so the announcement happens
+once through the same already-wired pipe. The banner stays on screen and keyboard-reachable afterward
+for anyone who wants to revisit it, it just isn't a second independent announcement source.
+
 ## Respecting system settings
 
 - `app.manifest` declares per-monitor v2 DPI awareness, so text/control sizing stays correct on

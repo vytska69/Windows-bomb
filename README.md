@@ -26,6 +26,12 @@ Windows runner, published self-contained for `win-x64`, and attached to a new re
 Either way, no separate .NET install is required (it's self-contained), but you'll still need the
 Windows ADK's `oscdimg.exe` — see below.
 
+The app checks for a newer release itself, right on startup — no manual "check for updates" step. A
+banner appears above the tabs if one's found, with a button that opens the new release's GitHub page;
+if the check fails (no internet, GitHub unreachable) it just stays quiet rather than showing an error,
+since this tool is routinely run on machines with no network access. See
+`src/WinIsoOptimizer.Core/Updates/GitHubReleaseUpdateChecker.cs`.
+
 ## What it does today
 
 - **Download an official Windows 10/11 ISO directly from Microsoft** (Home/Pro/Education) — the
@@ -124,6 +130,8 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
   what is and isn't fixable this way.
 - `Setup/` — `AdkDeploymentToolsInstaller`, which drives the Windows ADK's own silent installer to get
   `oscdimg.exe` without the user going through the ADK setup wizard (see the requirements section above).
+- `Updates/` — `GitHubReleaseUpdateChecker`, which the GUI calls on startup to compare its own build
+  number (stamped into the exe's FileVersion by CI) against the latest published GitHub release.
 - `Jobs/IsoOptimizationJob` — orchestrates the full pipeline end to end, reporting progress through
   one `IProgress<OptimizationProgress>` callback so a GUI can drive a progress bar and a
   screen-reader-announced status line from the same stream.
@@ -137,9 +145,10 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 63 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
+All 76 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
 argument construction, dism-output parsing, error/cleanup ordering (e.g. "a registry hive is always
-unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), and the
-Microsoft ISO-download protocol's URL construction/response parsing against a fake process runner and a
+unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), the
+Microsoft ISO-download protocol's URL construction/response parsing, and the update-check's build-number
+comparison, against a fake process runner and a
 fake `HttpMessageHandler`, respectively. The GUI project has no automated tests — it needs manual
 verification on Windows with a screen reader, see docs/ACCESSIBILITY.md.

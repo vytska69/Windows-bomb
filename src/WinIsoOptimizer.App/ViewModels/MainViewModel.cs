@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using WinIsoOptimizer.Core.Download;
 using WinIsoOptimizer.Core.Drivers;
@@ -10,17 +11,24 @@ using WinIsoOptimizer.Core.LegacyBoot;
 using WinIsoOptimizer.Core.Processes;
 using WinIsoOptimizer.Core.Setup;
 using WinIsoOptimizer.Core.Telemetry;
+using WinIsoOptimizer.Core.Updates;
 
 namespace WinIsoOptimizer.App.ViewModels;
 
 public sealed class MainViewModel : ViewModelBase
 {
+    // The GitHub repo this build is published from — used only to check for newer releases.
+    private const string UpdateCheckOwner = "vytska69";
+    private const string UpdateCheckRepo = "Windows-bomb";
+
     private readonly IsoOptimizationJob _job;
     private readonly ExternalToolPaths _toolPaths = new();
     private readonly MicrosoftIsoDownloadService _isoDownloadService = new();
     private readonly IHttpDownloader _isoFileDownloader = new HttpDownloader();
+    private readonly GitHubReleaseUpdateChecker _updateChecker = new(UpdateCheckOwner, UpdateCheckRepo);
     private CancellationTokenSource? _runCancellation;
     private Task _appLoadTask = Task.CompletedTask;
+    private string? _latestReleaseUrl;
 
     public MainViewModel()
     {
@@ -43,6 +51,12 @@ public sealed class MainViewModel : ViewModelBase
         FetchLanguagesCommand = new RelayCommand(FetchLanguagesAsync, () => !IsBusy && SelectedRelease is not null);
         FetchDownloadLinksCommand = new RelayCommand(FetchDownloadLinksAsync, () => !IsBusy && SelectedLanguage is not null);
         DownloadIsoCommand = new RelayCommand(DownloadIsoAsync, () => !IsBusy && SelectedDownloadLink is not null && !string.IsNullOrWhiteSpace(IsoDownloadDestinationPath));
+        OpenReleasePageCommand = new RelayCommand(OpenReleasePage, () => _latestReleaseUrl is not null);
+
+        // Fire-and-forget: checks for a newer release the moment the app opens, without delaying the
+        // window from appearing. Silent on failure (no internet, GitHub unreachable, rate-limited) —
+        // that's a routine condition for a tool that's often run offline, not something to alarm over.
+        _ = CheckForUpdatesAsync();
     }
 
     public RelayCommand LoadSourceCommand { get; }
@@ -54,6 +68,7 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand FetchLanguagesCommand { get; }
     public RelayCommand FetchDownloadLinksCommand { get; }
     public RelayCommand DownloadIsoCommand { get; }
+    public RelayCommand OpenReleasePageCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
@@ -172,6 +187,21 @@ public sealed class MainViewModel : ViewModelBase
         set => SetField(ref _legacyUefiBootStatus, value);
     }
 
+    // --- Update check ---
+    private bool _isUpdateAvailable;
+    public bool IsUpdateAvailable
+    {
+        get => _isUpdateAvailable;
+        set => SetField(ref _isUpdateAvailable, value);
+    }
+
+    private string _updateNotificationText = string.Empty;
+    public string UpdateNotificationText
+    {
+        get => _updateNotificationText;
+        set => SetField(ref _updateNotificationText, value);
+    }
+
     // --- Windows ISO download ---
     private WindowsIsoRelease? _selectedRelease;
     public WindowsIsoRelease? SelectedRelease { get => _selectedRelease; set => SetField(ref _selectedRelease, value); }
@@ -245,6 +275,34 @@ public sealed class MainViewModel : ViewModelBase
         // not a direct binary download link — Microsoft's direct link is versioned per ADK release and
         // changes over time, so hardcoding one here would eventually point at a stale/broken URL.
         Process.Start(new ProcessStartInfo(AdkDeploymentToolsInstaller.OfficialAdkDownloadPageUrl) { UseShellExecute = true });
+    }
+
+    private void OpenReleasePage()
+    {
+        if (_latestReleaseUrl is null) return;
+        Process.Start(new ProcessStartInfo(_latestReleaseUrl) { UseShellExecute = true });
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            // The build number CI stamps into FileVersion (see build-and-release.yml) — "0" for a
+            // local dev build that was never published, which just means every real release looks newer.
+            var currentBuild = Assembly.GetExecutingAssembly().GetName().Version?.Build ?? 0;
+            var result = await _updateChecker.CheckForUpdateAsync(currentBuild).ConfigureAwait(true);
+            if (!result.IsUpdateAvailable) return;
+
+            _latestReleaseUrl = result.ReleaseUrl;
+            UpdateNotificationText = $"A new version ({result.LatestVersionTag}) is available.";
+            IsUpdateAvailable = true;
+            Log($"{UpdateNotificationText} Click \"View update\" above to download it.");
+        }
+        catch
+        {
+            // No internet, GitHub unreachable, rate-limited, etc. — routine for a tool that's often
+            // run offline; not worth alarming the user over on every single launch.
+        }
     }
 
     private async Task InstallAdkDeploymentToolsAsync()

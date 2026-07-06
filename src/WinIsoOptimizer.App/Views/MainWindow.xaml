@@ -11,14 +11,28 @@
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- ============================ UPDATE NOTIFICATION (hidden until an update is found) ============================ -->
+        <Border Grid.Row="0" Margin="0,0,0,8" Padding="8" Background="#FFFFF4CE" BorderBrush="#FFE0B000" BorderThickness="1"
+                Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVisibility}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="View update" Margin="8,0,0,0"
+                        Command="{Binding OpenReleasePageCommand}"
+                        AutomationProperties.Name="Open the new release page in your browser" />
+                <TextBlock Text="{Binding UpdateNotificationText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                           AutomationProperties.Name="Update available"
+                           AutomationProperties.LiveSetting="Polite" />
+            </DockPanel>
+        </Border>
+
         <!-- Not disabled while a job is running: the Cancel button lives inside this TabControl's
              content (Build tab), so disabling the whole control would make it unreachable exactly
              when it's needed. Each action button already gates itself via its command's CanExecute. -->
-        <TabControl Grid.Row="0" AutomationProperties.Name="Optimizer tabs">
+        <TabControl Grid.Row="1" AutomationProperties.Name="Optimizer tabs">
 
             <!-- ============================ DOWNLOAD WINDOWS ============================ -->
             <TabItem Header="_Download Windows">
@@ -299,7 +313,7 @@
         </TabControl>
 
         <!-- ============================ STATUS / PROGRESS (always visible) ============================ -->
-        <Grid Grid.Row="1" Margin="0,12,0,0">
+        <Grid Grid.Row="2" Margin="0,12,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />

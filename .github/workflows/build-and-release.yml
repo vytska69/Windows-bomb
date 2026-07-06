@@ -51,6 +51,9 @@ jobs:
         run: dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj --configuration Release --no-build
 
       - name: Publish WinIsoOptimizer.App (self-contained win-x64)
+        # Stamps the run number into the exe's file version so the in-app update checker
+        # (GitHubReleaseUpdateChecker) can compare it against the "build-<run number>" release tags
+        # this same workflow creates — see MainViewModel.CheckForUpdatesAsync.
         run: >
           dotnet publish src/WinIsoOptimizer.App/WinIsoOptimizer.App.csproj
           --configuration Release
@@ -58,6 +61,9 @@ jobs:
           --self-contained true
           --output publish/WinIsoOptimizer
           -p:PublishSingleFile=false
+          -p:Version=1.0.${{ github.run_number }}
+          -p:AssemblyVersion=1.0.${{ github.run_number }}.0
+          -p:FileVersion=1.0.${{ github.run_number }}.0
 
       - name: Zip published output (portable, no-install option)
         shell: pwsh
