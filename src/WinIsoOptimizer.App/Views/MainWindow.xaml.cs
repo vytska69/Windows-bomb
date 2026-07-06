@@ -2,8 +2,12 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
-using Microsoft.Win32;
 using WinIsoOptimizer.App.ViewModels;
+
+// UseWindowsForms is also enabled (only for FolderBrowserDialog, which WPF has no equivalent of),
+// so System.Windows.Forms is in scope alongside Microsoft.Win32 — both define OpenFileDialog and
+// SaveFileDialog, so every use below is qualified explicitly rather than relying on a `using`
+// directive precedence rule (that assumption is what caused the previous CS0104 fix attempt here).
 
 namespace WinIsoOptimizer.App.Views;
 
@@ -39,7 +43,7 @@ public partial class MainWindow : Window
 
     private void BrowseSourceIso_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
+        var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Pasirinkite Windows ISO failą",
             Filter = "ISO failai (*.iso)|*.iso|Visi failai (*.*)|*.*",
@@ -52,7 +56,7 @@ public partial class MainWindow : Window
 
     private void BrowseOutputIso_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SaveFileDialog
+        var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Title = "Kur išsaugoti optimizuotą ISO failą",
             Filter = "ISO failai (*.iso)|*.iso",
@@ -66,7 +70,7 @@ public partial class MainWindow : Window
 
     private void BrowseOscdimg_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
+        var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Pasirinkite oscdimg.exe (Windows ADK Deployment Tools)",
             Filter = "oscdimg.exe|oscdimg.exe|Vykdomieji failai (*.exe)|*.exe",
