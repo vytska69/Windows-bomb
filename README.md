@@ -26,11 +26,20 @@ Windows runner, published self-contained for `win-x64`, and attached to a new re
 Either way, no separate .NET install is required (it's self-contained), but you'll still need the
 Windows ADK's `oscdimg.exe` — see below.
 
-The app checks for a newer release itself, right on startup — no manual "check for updates" step. A
-banner appears above the tabs if one's found, with a button that opens the new release's GitHub page;
-if the check fails (no internet, GitHub unreachable) it just stays quiet rather than showing an error,
-since this tool is routinely run on machines with no network access. See
-`src/WinIsoOptimizer.Core/Updates/GitHubReleaseUpdateChecker.cs`.
+The app checks for a newer release itself, right on startup — no manual "check for updates" step. If
+the check fails (no internet, GitHub unreachable) it just stays quiet rather than showing an error,
+since this tool is routinely run on machines with no network access. When a newer build is found, a
+banner appears above the tabs with two options:
+
+- **Update Now** — downloads the new installer, verifies its SHA-256 against the hash GitHub itself
+  reports for that release asset (refuses to proceed, and deletes the file, if it doesn't match), asks
+  for one confirmation, then closes the app and runs the installer silently
+  (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART` — no setup wizard). Only works if this copy was placed by
+  the installer in the first place (detected by the presence of its `unins*.exe` next to the exe) — a
+  portable/zip copy has no installer to hand control back to, so it's told to update manually instead.
+- **View update** — just opens the new release's GitHub page in your browser, no download/install.
+
+See `src/WinIsoOptimizer.Core/Updates/GitHubReleaseUpdateChecker.cs` and `SelfUpdateService.cs`.
 
 ## What it does today
 
@@ -131,7 +140,9 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
 - `Setup/` — `AdkDeploymentToolsInstaller`, which drives the Windows ADK's own silent installer to get
   `oscdimg.exe` without the user going through the ADK setup wizard (see the requirements section above).
 - `Updates/` — `GitHubReleaseUpdateChecker`, which the GUI calls on startup to compare its own build
-  number (stamped into the exe's FileVersion by CI) against the latest published GitHub release.
+  number (stamped into the exe's FileVersion by CI) against the latest published GitHub release; and
+  `SelfUpdateService`, which downloads and SHA-256-verifies the new installer and detects whether this
+  copy is installed (vs. portable) before letting the GUI launch it.
 - `Jobs/IsoOptimizationJob` — orchestrates the full pipeline end to end, reporting progress through
   one `IProgress<OptimizationProgress>` callback so a GUI can drive a progress bar and a
   screen-reader-announced status line from the same stream.
@@ -145,10 +156,11 @@ iscc.exe /DMyAppVersion=1.0.0 /DPublishDir="$PWD\publish\WinIsoOptimizer" instal
 dotnet test src/WinIsoOptimizer.Core.Tests/WinIsoOptimizer.Core.Tests.csproj
 ```
 
-All 76 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
+All 88 tests run and pass without a Windows host, dism/oscdimg, or real network access — they exercise
 argument construction, dism-output parsing, error/cleanup ordering (e.g. "a registry hive is always
 unloaded even if a tweak fails, or dism unmount always runs even if servicing throws"), the
-Microsoft ISO-download protocol's URL construction/response parsing, and the update-check's build-number
-comparison, against a fake process runner and a
-fake `HttpMessageHandler`, respectively. The GUI project has no automated tests — it needs manual
+Microsoft ISO-download protocol's URL construction/response parsing, the update-check's build-number
+comparison, and the self-updater's hash verification (including that a mismatched download is deleted,
+never handed back as "ready to run"), against a fake process runner and a
+fake `HttpMessageHandler`/`IHttpDownloader`, respectively. The GUI project has no automated tests — it needs manual
 verification on Windows with a screen reader, see docs/ACCESSIBILITY.md.

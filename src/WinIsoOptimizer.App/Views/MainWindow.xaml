@@ -20,6 +20,10 @@
         <Border Grid.Row="0" Margin="0,0,0,8" Padding="8" Background="#FFFFF4CE" BorderBrush="#FFE0B000" BorderThickness="1"
                 Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVisibility}}">
             <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Update Now" Margin="8,0,0,0"
+                        Command="{Binding UpdateNowCommand}"
+                        AutomationProperties.Name="Download, verify, and install the update now"
+                        AutomationProperties.HelpText="Closes the application and installs the update silently after asking for confirmation." />
                 <Button DockPanel.Dock="Right" Content="View update" Margin="8,0,0,0"
                         Command="{Binding OpenReleasePageCommand}"
                         AutomationProperties.Name="Open the new release page in your browser" />

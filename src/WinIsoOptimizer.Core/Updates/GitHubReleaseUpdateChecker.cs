@@ -14,6 +14,11 @@ namespace WinIsoOptimizer.Core.Updates;
 /// </summary>
 public sealed class GitHubReleaseUpdateChecker
 {
+    /// <summary>Matches the name CI's Inno Setup step uploads the installer as (see
+    /// .github/workflows/build-and-release.yml) — used to find its download URL and hash within the
+    /// release's asset list.</summary>
+    public const string InstallerAssetName = "WinIsoOptimizer-Setup.exe";
+
     private static readonly Regex BuildTagPattern = new(@"^build-(\d+)$", RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -37,6 +42,15 @@ public sealed class GitHubReleaseUpdateChecker
         return match.Success ? int.Parse(match.Groups[1].Value) : null;
     }
 
+    /// <summary>Strips a leading "sha256:" prefix from a GitHub asset digest, if present, leaving just
+    /// the hex hash so it can be compared directly against a locally-computed one.</summary>
+    internal static string? NormalizeSha256Digest(string? digest)
+    {
+        if (digest is null) return null;
+        const string prefix = "sha256:";
+        return digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? digest[prefix.Length..] : digest;
+    }
+
     public async Task<UpdateCheckResult> CheckForUpdateAsync(int currentBuildNumber, CancellationToken ct = default)
     {
         var url = $"https://api.github.com/repos/{_owner}/{_repo}/releases/latest";
@@ -54,10 +68,25 @@ public sealed class GitHubReleaseUpdateChecker
 
         var latestBuildNumber = ParseBuildNumber(release.TagName);
         var isNewer = latestBuildNumber is { } n && n > currentBuildNumber;
-        return new UpdateCheckResult(isNewer, latestBuildNumber, release.TagName, release.HtmlUrl);
+
+        var installerAsset = release.Assets?.FirstOrDefault(a => string.Equals(a.Name, InstallerAssetName, StringComparison.OrdinalIgnoreCase));
+
+        return new UpdateCheckResult(
+            isNewer,
+            latestBuildNumber,
+            release.TagName,
+            release.HtmlUrl,
+            installerAsset?.BrowserDownloadUrl,
+            NormalizeSha256Digest(installerAsset?.Digest));
     }
 
     private sealed record GitHubReleaseResponse(
         [property: JsonPropertyName("tag_name")] string TagName,
-        [property: JsonPropertyName("html_url")] string HtmlUrl);
+        [property: JsonPropertyName("html_url")] string HtmlUrl,
+        [property: JsonPropertyName("assets")] GitHubReleaseAsset[]? Assets);
+
+    private sealed record GitHubReleaseAsset(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("browser_download_url")] string BrowserDownloadUrl,
+        [property: JsonPropertyName("digest")] string? Digest);
 }

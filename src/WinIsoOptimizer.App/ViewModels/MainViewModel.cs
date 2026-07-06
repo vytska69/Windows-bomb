@@ -26,9 +26,13 @@ public sealed class MainViewModel : ViewModelBase
     private readonly MicrosoftIsoDownloadService _isoDownloadService = new();
     private readonly IHttpDownloader _isoFileDownloader = new HttpDownloader();
     private readonly GitHubReleaseUpdateChecker _updateChecker = new(UpdateCheckOwner, UpdateCheckRepo);
+    private readonly SelfUpdateService _selfUpdateService = new();
     private CancellationTokenSource? _runCancellation;
     private Task _appLoadTask = Task.CompletedTask;
     private string? _latestReleaseUrl;
+    private string? _latestInstallerUrl;
+    private string? _latestInstallerSha256;
+    private string? _latestVersionTag;
 
     public MainViewModel()
     {
@@ -52,6 +56,7 @@ public sealed class MainViewModel : ViewModelBase
         FetchDownloadLinksCommand = new RelayCommand(FetchDownloadLinksAsync, () => !IsBusy && SelectedLanguage is not null);
         DownloadIsoCommand = new RelayCommand(DownloadIsoAsync, () => !IsBusy && SelectedDownloadLink is not null && !string.IsNullOrWhiteSpace(IsoDownloadDestinationPath));
         OpenReleasePageCommand = new RelayCommand(OpenReleasePage, () => _latestReleaseUrl is not null);
+        UpdateNowCommand = new RelayCommand(UpdateNowAsync, () => !IsBusy && _latestInstallerUrl is not null && _latestInstallerSha256 is not null);
 
         // Fire-and-forget: checks for a newer release the moment the app opens, without delaying the
         // window from appearing. Silent on failure (no internet, GitHub unreachable, rate-limited) —
@@ -69,6 +74,7 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand FetchDownloadLinksCommand { get; }
     public RelayCommand DownloadIsoCommand { get; }
     public RelayCommand OpenReleasePageCommand { get; }
+    public RelayCommand UpdateNowCommand { get; }
 
     public ObservableCollection<string> LogMessages { get; } = new();
     public ObservableCollection<WimImageInfo> Editions { get; } = new();
@@ -294,14 +300,65 @@ public sealed class MainViewModel : ViewModelBase
             if (!result.IsUpdateAvailable) return;
 
             _latestReleaseUrl = result.ReleaseUrl;
+            _latestInstallerUrl = result.InstallerDownloadUrl;
+            _latestInstallerSha256 = result.InstallerSha256;
+            _latestVersionTag = result.LatestVersionTag;
             UpdateNotificationText = $"A new version ({result.LatestVersionTag}) is available.";
             IsUpdateAvailable = true;
-            Log($"{UpdateNotificationText} Click \"View update\" above to download it.");
+            Log(_latestInstallerUrl is not null
+                ? $"{UpdateNotificationText} Click \"Update Now\" above to install it, or \"View update\" to open the release page."
+                : $"{UpdateNotificationText} Click \"View update\" above to download it.");
         }
         catch
         {
             // No internet, GitHub unreachable, rate-limited, etc. — routine for a tool that's often
             // run offline; not worth alarming the user over on every single launch.
+        }
+    }
+
+    private async Task UpdateNowAsync()
+    {
+        if (_latestInstallerUrl is null || _latestInstallerSha256 is null) return;
+
+        var appDirectory = AppContext.BaseDirectory;
+        if (!SelfUpdateService.IsRunningFromInstalledLocation(appDirectory))
+        {
+            // Fully qualified: System.Windows.MessageBox and System.Windows.Forms.MessageBox both
+            // exist (UseWindowsForms is also enabled, for FolderBrowserDialog), so the bare name is
+            // ambiguous here exactly like Application/OpenFileDialog/SaveFileDialog were elsewhere.
+            System.Windows.MessageBox.Show(
+                "This looks like the portable (zip) copy, not one installed via WinIsoOptimizer-Setup.exe, " +
+                "so there's no installer to hand control back to for an in-place update. Click \"View update\" " +
+                "instead and download the new zip manually.",
+                "Can't self-update a portable copy",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var confirmed = System.Windows.MessageBox.Show(
+            $"This will download and verify {_latestVersionTag}, then close Windows ISO Optimizer and " +
+            "install the update silently (no setup wizard). Continue?",
+            "Update Windows ISO Optimizer",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+        if (confirmed != System.Windows.MessageBoxResult.Yes) return;
+
+        IsBusy = true;
+        try
+        {
+            var installerPath = Path.Combine(Path.GetTempPath(), "WinIsoOptimizer", "update", GitHubReleaseUpdateChecker.InstallerAssetName);
+            Log($"Downloading {_latestVersionTag}...");
+            await _selfUpdateService.DownloadAndVerifyAsync(_latestInstallerUrl, installerPath, _latestInstallerSha256, new Progress<string>(Log)).ConfigureAwait(true);
+
+            Log("Update verified. Closing to install it now...");
+            SelfUpdateService.LaunchInstallerSilently(installerPath);
+            System.Windows.Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log($"Error updating: {ex.Message}");
+            IsBusy = false;
         }
     }
 

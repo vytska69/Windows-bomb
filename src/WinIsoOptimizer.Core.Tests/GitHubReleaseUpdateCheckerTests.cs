@@ -95,4 +95,52 @@ public class GitHubReleaseUpdateCheckerTests
         var request = Assert.Single(handler.Requests);
         Assert.NotEmpty(request.Headers.UserAgent);
     }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_extracts_the_installer_asset_url_and_hash()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.WhenContains("/releases/latest", _ => FakeHttpMessageHandler.Json("""
+            {
+              "tag_name": "build-15",
+              "html_url": "https://example.invalid/release",
+              "assets": [
+                { "name": "WinIsoOptimizer-win-x64.zip", "browser_download_url": "https://example.invalid/zip", "digest": "sha256:aaaa" },
+                { "name": "WinIsoOptimizer-Setup.exe", "browser_download_url": "https://example.invalid/Setup.exe", "digest": "sha256:BBBB1234" }
+              ]
+            }
+            """));
+        var checker = new GitHubReleaseUpdateChecker("someone", "somerepo", new HttpClient(handler));
+
+        var result = await checker.CheckForUpdateAsync(currentBuildNumber: 10);
+
+        Assert.Equal("https://example.invalid/Setup.exe", result.InstallerDownloadUrl);
+        Assert.Equal("BBBB1234", result.InstallerSha256);
+    }
+
+    [Fact]
+    public async Task CheckForUpdateAsync_leaves_installer_fields_null_when_release_has_no_matching_asset()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.WhenContains("/releases/latest", _ => FakeHttpMessageHandler.Json("""
+            { "tag_name": "build-15", "html_url": "https://example.invalid/release", "assets": [] }
+            """));
+        var checker = new GitHubReleaseUpdateChecker("someone", "somerepo", new HttpClient(handler));
+
+        var result = await checker.CheckForUpdateAsync(currentBuildNumber: 10);
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.Null(result.InstallerDownloadUrl);
+        Assert.Null(result.InstallerSha256);
+    }
+
+    [Theory]
+    [InlineData("sha256:abc123", "abc123")]
+    [InlineData("SHA256:ABC123", "ABC123")]
+    [InlineData("abc123", "abc123")]
+    [InlineData(null, null)]
+    public void NormalizeSha256Digest_strips_the_prefix_when_present(string? input, string? expected)
+    {
+        Assert.Equal(expected, GitHubReleaseUpdateChecker.NormalizeSha256Digest(input));
+    }
 }
